@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Team 1",
+    "duration": 20,
+    "status": "Not started",
+    "characters": [],
+    "actions": [
+      "YangYang Intro Skill",
+      "YangYang Basic Attack 1",
+      "YangYang Basic Attack 2",
+      "YangYang Heavy Attack",
+      "YangYang Resonance Skill",
+      "YangYang Outro Skill",
+      "suisui Intro Skill",
+      "suisui Resonance Skill",
+      "suisui Resonance Liberation",
+      "suisui Heavy Attack",
+      "suisui Basic Attack"
+    ]
+  }
+]

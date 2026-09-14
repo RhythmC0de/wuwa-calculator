@@ -1,0 +1,43 @@
+{
+  "MANUAL_CHARACTER_KITS": {
+    "aalto": {
+      "kit_name": "Aalto",
+      "skills": [
+        {
+          "name": "Ataque Básico (Half Truths)",
+          "description": "Basic Attack Aalto fires up to 5 consecutive shots, dealing Aero DMG. Basic Attack 4 will spread the Mist forward, which lasts for 1.5s."
+        },
+        {
+          "name": "Habilidade de Ressonância",
+          "description": "Descrição da habilidade de ressonância."
+        },
+        {
+          "name": "Circuito Forte",
+          "description": "Descrição do circuito forte."
+        },
+        {
+          "name": "Liberação de Ressonância",
+          "description": "Descrição da liberação de ressonância."
+        }
+      ],
+      "team_buffs": [
+        [
+          "Bônus de Equipe",
+          0.0
+        ]
+      ],
+      "personal_buffs": [
+        [
+          "Bônus Pessoal",
+          0.0
+        ]
+      ],
+      "markers": [
+        [
+          "Marcador",
+          0.0
+        ]
+      ]
+    }
+  }
+}
