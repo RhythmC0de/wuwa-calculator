@@ -61,14 +61,15 @@ class ResonatorTab(QWidget):
 
         self.top_banner_card = QFrame()
         self.top_banner_card.setObjectName("topBanner")
-        self.top_banner_card.setFixedHeight(140)
+        self.top_banner_card.setFixedHeight(170)
         self.top_banner_card.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
         self.top_banner_card.setStyleSheet(
             "QFrame#topBanner {"
-            "border: 0;"
+            "border: 1px solid #6FEAFF;"
+            "border-radius: 10px;"
             "background: transparent;"
             "}"
         )
@@ -99,7 +100,8 @@ class ResonatorTab(QWidget):
         self.character_quote.setObjectName("bannerQuote")
         self.character_quote.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.character_quote.setWordWrap(True)
-        self.character_quote.setMaximumWidth(220)
+        self.character_quote.setMinimumWidth(240)
+        self.character_quote.setMaximumWidth(300)
         banner_layout.addWidget(self.character_quote, 1)
         columns = QHBoxLayout()
         columns.setSpacing(14)
@@ -206,6 +208,24 @@ class ResonatorTab(QWidget):
         markers_layout.addStretch(1)
         self.controls.addTab(markers, "Marcadores")
         self._build_damage_tab()
+        self.controls.tabBar().hide()
+        tab_switcher = QWidget()
+        tab_grid = QGridLayout(tab_switcher)
+        tab_grid.setContentsMargins(0, 0, 0, 4)
+        tab_grid.setHorizontalSpacing(6)
+        tab_grid.setVerticalSpacing(6)
+        for index in range(self.controls.count()):
+            tab_button = QPushButton(self.controls.tabText(index))
+            tab_button.setObjectName("resonatorTabButton")
+            tab_button.clicked.connect(
+                lambda _checked=False, tab_index=index: self.controls.setCurrentIndex(tab_index)
+            )
+            row, column = divmod(index, 3)
+            tab_grid.addWidget(tab_button, row, column)
+        self.controls.currentChanged.connect(self._refresh_control_tab_buttons)
+        self._control_tab_buttons = list(tab_switcher.findChildren(QPushButton))
+        self._refresh_control_tab_buttons(0)
+        left_layout.addWidget(tab_switcher)
         left_layout.addWidget(self.controls, 1)
         columns.addWidget(left, 1)
 
@@ -233,6 +253,12 @@ class ResonatorTab(QWidget):
             self._element_changed
         )
 
+    def _refresh_control_tab_buttons(self, active_index: int) -> None:
+        for index, button in enumerate(self._control_tab_buttons):
+            button.setProperty("active", index == active_index)
+            button.style().unpolish(button)
+            button.style().polish(button)
+
     def _element_changed(self, element: str) -> None:
         self.element_badge.setText(f"{self._element_icon(element)} {element}")
         self.element_badge.setProperty("element", element)
@@ -240,8 +266,8 @@ class ResonatorTab(QWidget):
         self.element_badge.style().polish(self.element_badge)
         for widget, blur, opacity in self._element_glow_widgets:
             apply_element_glow(widget, element, blur=blur, opacity=opacity)
-        apply_element_glow(self.character_image, element, blur=18, opacity=150)
-        apply_element_glow(self.weapon_image, element, blur=18, opacity=150)
+        apply_element_glow(self.character_image, element, blur=12, opacity=85)
+        apply_element_glow(self.weapon_image, element, blur=10, opacity=70)
 
     @staticmethod
     def _element_icon(element: str) -> str:
@@ -264,52 +290,90 @@ class ResonatorTab(QWidget):
         scroll.setWidget(content)
         outer_layout.addWidget(scroll)
         layout.addWidget(TitleLabel("Cálculo de dano"))
+        formula_box = QFrame()
+        formula_box.setObjectName("damageFormulaBox")
+        formula_layout = QVBoxLayout(formula_box)
+        formula_layout.setContentsMargins(12, 8, 12, 8)
         formula = QLabel(
             "Dano = (ATK Total x Mod. Habilidade) x (1 + soma dos bônus) "
             "x Mult. Crítico x Fator de Defesa x Fator de Resistência"
         )
-        formula.setObjectName("muted")
+        formula.setObjectName("damageFormula")
         formula.setWordWrap(True)
-        layout.addWidget(formula)
+        formula_layout.addWidget(formula)
+        layout.addWidget(formula_box)
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(8)
         self.damage_fields: dict[str, QDoubleSpinBox | QSpinBox] = {}
-        definitions = (
-            ("attack_total", "ATK Total", 1500.0, 0.0, 99999.0),
-            ("skill_modifier", "Mod. Habilidade (%)", 120.0, 0.0, 99999.0),
-            ("damage_bonus", "Soma Bônus de Dano (%)", 20.0, 0.0, 99999.0),
-            ("crit_multiplier", "Mult. Crítico", 2.5, 0.0, 999.0),
-            ("defense_factor", "Fator de Defesa", 0.8, 0.0, 10.0),
-            ("resistance_factor", "Fator de Resistência", 1.0, 0.0, 10.0),
-            ("duration", "Duração (s)", 10.0, 0.1, 99999.0),
+        groups = (
+            ("ATACANTE", (
+                ("attack_total", "ATK Total", 1500.0, 0.0, 99999.0),
+                ("skill_modifier", "Mod. Habilidade (%)", 120.0, 0.0, 99999.0),
+                ("damage_bonus", "Soma Bônus de Dano (%)", 20.0, 0.0, 99999.0),
+                ("crit_multiplier", "Mult. Crítico", 2.5, 0.0, 999.0),
+            )),
+            ("INIMIGO / DEFESA", (
+                ("defense_factor", "Fator de Defesa", 0.8, 0.0, 10.0),
+                ("resistance_factor", "Fator de Resistência", 1.0, 0.0, 10.0),
+            )),
+            ("DURAÇÃO & EXECUÇÃO", (
+                ("duration", "Duração (s)", 10.0, 0.1, 99999.0),
+                ("hits", "Hits", 1, 1, 999),
+                ("casts", "Casts", 1, 1, 999),
+            )),
         )
-        for index, (key, label, value, minimum, maximum) in enumerate(definitions):
-            row, column = divmod(index, 2)
-            grid.addWidget(QLabel(label), row * 2, column)
-            field = QDoubleSpinBox()
-            field.setRange(minimum, maximum)
-            field.setValue(value)
-            field.setDecimals(2)
-            self.damage_fields[key] = field
-            grid.addWidget(field, row * 2 + 1, column)
+        groups_layout = QGridLayout()
+        groups_layout.setHorizontalSpacing(10)
+        groups_layout.setVerticalSpacing(10)
+        for group_index, (title, definitions) in enumerate(groups):
+            group = QFrame()
+            group.setObjectName("damageInputGroup")
+            group_layout = QGridLayout(group)
+            group_layout.setContentsMargins(10, 8, 10, 10)
+            group_layout.setHorizontalSpacing(8)
+            group_layout.setVerticalSpacing(5)
+            heading = QLabel(title)
+            heading.setObjectName("damageGroupTitle")
+            group_layout.addWidget(heading, 0, 0, 1, 2)
+            for row, (key, field_label, value, minimum, maximum) in enumerate(definitions, 1):
+                label = QLabel(field_label)
+                label.setObjectName("damageInputLabel")
+                group_layout.addWidget(label, row, 0)
+                field = QSpinBox() if key in {"hits", "casts"} else QDoubleSpinBox()
+                field.setRange(minimum, maximum)
+                field.setValue(value)
+                if isinstance(field, QDoubleSpinBox):
+                    field.setDecimals(2)
+                field.setObjectName("damageInput")
+                self.damage_fields[key] = field
+                group_layout.addWidget(field, row, 1)
+            groups_layout.addWidget(group, group_index // 2, group_index % 2)
+        layout.addLayout(groups_layout)
 
-        for key, label, row, column in (("hits", "Hits", 8, 0), ("casts", "Casts", 8, 1)):
-            grid.addWidget(QLabel(label), row, column)
-            field = QSpinBox()
-            field.setRange(1, 999)
-            field.setValue(1)
-            self.damage_fields[key] = field
-            grid.addWidget(field, row + 1, column)
-        layout.addLayout(grid)
-
-        self.calculate_button = QPushButton("Calcular dano desta ID")
+        self.calculate_button = QPushButton("⚡  Calcular dano desta ID")
+        self.calculate_button.setObjectName("damageCalculateButton")
         self.calculate_button.clicked.connect(self.calculate_character_damage)
         apply_glow(self.calculate_button, blur=18)
         layout.addWidget(self.calculate_button)
+
+        results = QHBoxLayout()
+        self.damage_stat_labels: dict[str, QLabel] = {}
+        for key, title in (("hit", "DANO BASE / HIT"), ("total", "DANO TOTAL"), ("dps", "DPS ESTIMADO")):
+            card = QFrame()
+            card.setObjectName("damageOutputCard")
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 9, 12, 9)
+            title_label = QLabel(title)
+            title_label.setObjectName("damageOutputTitle")
+            value_label = QLabel("--")
+            value_label.setObjectName("damageOutputValue")
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+            self.damage_stat_labels[key] = value_label
+            results.addWidget(card)
+        layout.addLayout(results)
+
         self.damage_result = QLabel("Dano: -- | Total: -- | DPS: --")
-        self.damage_result.setObjectName("metricValue")
+        self.damage_result.setVisible(False)
         layout.addWidget(self.damage_result)
         self.damage_details = QLabel("Execute o cálculo para ver a composição completa usada.")
         self.damage_details.setWordWrap(True)
@@ -321,6 +385,9 @@ class ResonatorTab(QWidget):
     def calculate_character_damage(self) -> None:
         values = {key: field.value() for key, field in self.damage_fields.items()}
         result = calculate_character_damage(**values)
+        self.damage_stat_labels["hit"].setText(f"{result.damage_per_hit:,.0f}")
+        self.damage_stat_labels["total"].setText(f"{result.total_damage:,.0f}")
+        self.damage_stat_labels["dps"].setText(f"{result.dps:,.0f}")
         self.damage_result.setText(
             f"Dano: {result.damage_per_hit:,.2f} | "
             f"Total: {result.total_damage:,.2f} | DPS: {result.dps:,.2f}"
@@ -365,12 +432,18 @@ class ResonatorTab(QWidget):
         )
 
     def _render_character(self, character_id: str) -> None:
-        display_name = character_id.replace(":", " ").title()
+        display_name = character_id.title()
         self.character_name.setText(display_name)
         element = CHARACTER_ELEMENTS.get(character_id)
         if element:
             self.element_box.setCurrentText(element)
-        self.element_badge.setText(f"{self._element_icon(self.element_box.currentText())} {self.element_box.currentText()}")
+        current_element = self.element_box.currentText()
+        self.element_badge.setText(f"{self._element_icon(current_element)} {current_element}")
+        self.element_badge.setProperty("element", current_element)
+        self.element_badge.style().unpolish(self.element_badge)
+        self.element_badge.style().polish(self.element_badge)
+        apply_element_glow(self.character_image, current_element, blur=12, opacity=85)
+        apply_element_glow(self.weapon_image, current_element, blur=10, opacity=70)
         quotes = CHARACTER_QUOTES.get(character_id, ())
         self.character_quote.setText(" / ".join(quotes))
         stats = CHARACTER_STATS_DB.get(character_id, {})

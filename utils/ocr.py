@@ -13,6 +13,8 @@ from pathlib import Path
 
 # Desativa o MKL-DNN por compatibilidade entre builds do PaddlePaddle.
 os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
+# PaddleOCR ainda inclui protos antigos incompatíveis com protobuf 4+.
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 
 from paddleocr import PaddleOCR
 project_root = Path(__file__).resolve().parents[1]

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import sys
+import os
 import re
 import unicodedata
 from pathlib import Path
-from urllib.request import urlopen
-from threading import Thread
 from typing import Any
+
+os.environ.setdefault("QT_LOGGING_RULES", "qt.multimedia.ffmpeg=false")
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -19,18 +20,23 @@ from PySide6.QtGui import (
     )
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog,
-    QFormLayout, QFrame, QHBoxLayout, QFileDialog,
+    QFormLayout, QFrame, QGraphicsBlurEffect, QHBoxLayout, QFileDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QProgressBar, QPushButton, QTabWidget, QVBoxLayout, QWidget,
+    QProgressBar, QPushButton, QSlider, QTabWidget, QVBoxLayout, QWidget,
 )
 
 from app.components import Card, TitleLabel
-from app.history_tab import HistoryTab
-from app.home_tab import HomeTab
-from app.multimedia_tab import MultimediaTab
 from app.resonator_tab import ResonatorTab
 from app.styles import application_qss, refresh_glows
-from app.teams_tab import TeamsTab
+
+ELEMENT_NAV_COLORS = {
+    "Aero": ("#145A4A", "#72E6C0", "#E8FFF8", "#1E8068"),
+    "Glacio": ("#285A78", "#82D8FF", "#E4F8FF", "#397A9D"),
+    "Electro": ("#49356F", "#B78CFF", "#F0E8FF", "#644B91"),
+    "Fusion": ("#713D2C", "#FF8A65", "#FFF0E8", "#975039"),
+    "Havoc": ("#642C43", "#E85D75", "#FFE8EE", "#873B58"),
+    "Spectro": ("#665522", "#FFD76A", "#FFF8D6", "#87702D"),
+}
 from data.characters_elements import CHARACTER_ELEMENTS
 from data.characters_ids import KNOWN_CHARACTER_IDS
 
@@ -39,72 +45,10 @@ TETHYS_CLOSE_ICON_PATH: str | None = None
 
 # Ícone customizado para o popup de fechar (local em Assets ou URL remota)
 # Deixe como arquivo local para melhor performance
-TETHYS_CLOSE_ICON_URL: str | None = "https://i.imgur.com/2cqxCI8.png"  # Carthetya original
-TETHYS_CLOSE_ICON_LOCAL: str | None = None  # Desativado - usar URL
-
-
-def _preload_banner_sync() -> dict[str, Any] | None:
-    """Pré-carrega o banner de forma síncrona com timeout - cascata de fontes."""
-    print("[Banner Preload] Iniciando pré-carregamento com cascata automática...")
-    result_container = {"data": None}
-    
-    def fetch_thread() -> None:
-        try:
-            # Usa a estratégia de cascata (WuwaTracker → Gist → Jingyuan)
-            from app.wuwa_tracker_adapter import fetch_current_banner_cascading
-            result_container["data"] = fetch_current_banner_cascading()
-            print("[Banner Preload] Fetch concluído")
-        except Exception as e:
-            print(f"[Banner Preload] Erro: {e}")
-            result_container["data"] = None
-    
-    thread = Thread(target=fetch_thread, daemon=True)
-    thread.start()
-    thread.join(timeout=5.0)  # Aguarda até 5 segundos
-    
-    if thread.is_alive():
-        print("[Banner Preload] Timeout - carregando Jingyuan padrão")
-        return _load_default_banner()
-    
-    banner_data = result_container.get("data")
-    if banner_data:
-        print(f"[Banner Preload] ✅ Banner pré-carregado de {banner_data.get('source', 'unknown')}")
-    else:
-        print("[Banner Preload] Nenhum banner disponível, carregando padrão")
-        return _load_default_banner()
-    return banner_data
-
-
-def _load_default_banner() -> dict[str, Any] | None:
-    """Carrega banner padrão (Jingyuan) de URL fixa."""
-    print("[Banner Preload] Carregando banner padrão do Jingyuan...")
-    try:
-        from datetime import datetime, timezone, timedelta
-        from urllib.request import Request, urlopen
-        
-        banner_url = "https://i.imgur.com/JrRW9Bt.jpeg"
-        request = Request(
-            banner_url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            },
-        )
-        with urlopen(request, timeout=10) as response:
-            image_bytes = response.read()
-            
-        # Cria data de término fictícia (30 dias no futuro)
-        ends_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-        
-        banner_data = {
-            "name": "Jingyuan",
-            "image_bytes": image_bytes,
-            "ends_at": ends_at,
-        }
-        print(f"[Banner Preload] Banner padrão carregado: {len(image_bytes)} bytes")
-        return banner_data
-    except Exception as e:
-        print(f"[Banner Preload] Erro ao carregar banner padrão: {e}")
-        return None
+TETHYS_CLOSE_ICON_URL: str | None = None
+TETHYS_CLOSE_ICON_LOCAL: str | None = str(
+    Path(__file__).resolve().parent.parent / "Assets" / "close_icon.png"
+)
 
 
 class PlaceholderTab(QWidget):
@@ -145,15 +89,20 @@ class SettingsTab(QWidget):
         self.background_box.setChecked(True)
         appearance_form.addRow("Fundo", self.background_box)
 
-        self.resolution_box = QComboBox()
-        self.resolution_box.addItems(
-            ["1440 x 900", "1280 x 800", "1024 x 720"])
-        appearance_form.addRow("Resolução", self.resolution_box)
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.opacity_slider.setRange(50, 100)
+        self.opacity_slider.setValue(85)
+        self.opacity_slider.setToolTip("Opacidade dos painéis e cards")
+        appearance_form.addRow("Opacidade da interface", self.opacity_slider)
+
+        self.accent_box = QComboBox()
+        self.accent_box.addItems([
+            "Ciano Tethys", "Dourado Sol", "Roxo Nécro", "Vermelho Alerta"
+        ])
+        appearance_form.addRow("Cor do tema", self.accent_box)
 
         self.confirm_exit_box = QCheckBox(
             "Confirmar antes de fechar o programa")
-        self.confirm_exit_box.setChecked(True)
-        appearance_form.addRow("Encerramento", self.confirm_exit_box)
         appearance_layout.addLayout(appearance_form)
         layout.addWidget(appearance_card)
 
@@ -209,8 +158,8 @@ class SettingsTab(QWidget):
         layout.addStretch(1)
 
         self.background_box.toggled.connect(self._background_changed)
-        self.resolution_box.currentTextChanged.connect(
-            self._resolution_changed)
+        self.opacity_slider.valueChanged.connect(self._interface_opacity_changed)
+        self.accent_box.currentTextChanged.connect(self._accent_changed)
         self.confirm_exit_box.toggled.connect(self._confirm_exit_changed)
         self._load_preferences()
 
@@ -223,9 +172,10 @@ class SettingsTab(QWidget):
         self.background_box.setChecked(
             settings.value("background", True, type=bool))
 
-        resolution = settings.value("resolution", "1440 x 900", type=str)
-        index = self.resolution_box.findText(resolution)
-        self.resolution_box.setCurrentIndex(max(0, index))
+        self.opacity_slider.setValue(settings.value("interface_opacity", 85, type=int))
+        accent = settings.value("accent_theme", "Ciano Tethys", type=str)
+        index = self.accent_box.findText(accent)
+        self.accent_box.setCurrentIndex(max(0, index))
         self.confirm_exit_box.setChecked(
             settings.value("confirm_exit", True, type=bool))
 
@@ -289,12 +239,17 @@ class SettingsTab(QWidget):
         if isinstance(window, WuwaQtWindow):
             window.apply_preferences()
 
-    def _resolution_changed(self, resolution: str) -> None:
-        self.preferences.setValue("resolution", resolution)
+    def _interface_opacity_changed(self, value: int) -> None:
+        self.preferences.setValue("interface_opacity", value)
         window = self.host or self.window()
         if isinstance(window, WuwaQtWindow):
-            width, height = (int(value) for value in resolution.split(" x "))
-            window.setFixedSize(width, height)
+            window.apply_preferences()
+
+    def _accent_changed(self, accent: str) -> None:
+        self.preferences.setValue("accent_theme", accent)
+        window = self.host or self.window()
+        if isinstance(window, WuwaQtWindow):
+            window.apply_preferences()
 
     def _confirm_exit_changed(self, enabled: bool) -> None:
         self.preferences.setValue("confirm_exit", enabled)
@@ -322,12 +277,12 @@ class SettingsTab(QWidget):
     def _restore_defaults(self) -> None:
         self.preferences.clear()
         self.background_box.setChecked(True)
-        self.resolution_box.setCurrentText("1440 x 900")
+        self.opacity_slider.setValue(85)
+        self.accent_box.setCurrentText("Ciano Tethys")
         self.confirm_exit_box.setChecked(True)
         self._reset_wallpaper()
         window = self.host or self.window()
         if isinstance(window, WuwaQtWindow):
-            window.setFixedSize(1440, 900)
             window.apply_preferences()
 
 
@@ -346,42 +301,42 @@ class SettingsDialog(QDialog):
 
 
 class AboutDialog(QDialog):
-    VERSION = "1.0.0"
+    VERSION = "1.4.0"
 
     def __init__(self, host: QWidget) -> None:
         super().__init__(host)
-        self.setWindowTitle("Sobre | Tethys")
+        self.setWindowTitle("Sobre | Tethys System")
         self.setModal(True)
         self.setMinimumSize(560, 430)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 20)
         layout.setSpacing(12)
-        layout.addWidget(TitleLabel("Tethys"))
+        layout.addWidget(TitleLabel("Tethys System"))
 
         description = QLabel(
-            "Laboratório local para análise de dano, "
-            "personagens, equipes e rotações "
-            "de Wuthering Waves."
+            "O Tethys System é o terminal central de Black Shores: "
+            "um sistema dedicado a observar, analisar e compreender o Lamento. "
+            "Nesta aplicação, seus cálculos são usados para estudar personagens, "
+            "equipes, rotações e dano em Wuthering Waves."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
 
         info = QLabel(
             f"Versão: {self.VERSION}\n"
-            "Tecnologia: Python + PySide6\n"
-            "Mídia: Qt Multimedia\n"
-            "Licença: MIT\n"
-            f"Projeto: {Path.cwd()}"
+            "Sistema: Tethys System\n"
+            "Licença: MIT"
         )
         info.setObjectName("muted")
         info.setWordWrap(True)
         layout.addWidget(info)
 
         notes = QLabel(
-            "Os dados carregados nesta aplicação são usados localmente. "
-            "Consulte o README para instruções, "
-            "limitações e informações do projeto."
+            "Assim como o terminal de Black Shores, o Tethys System organiza "
+            "informações para interpretar eventos complexos. Os dados do jogo "
+            "são usados localmente para apoiar análises e simulações. "
+            "Consulte o README para conhecer o sistema e seus recursos."
         )
         notes.setObjectName("muted")
         notes.setWordWrap(True)
@@ -402,18 +357,17 @@ class AboutDialog(QDialog):
         layout.addLayout(actions)
 
     def _open_readme(self) -> None:
-        readme = Path(__file__).resolve().parent.parent / "README.md"
+        readme = Path(__file__).resolve().parent.parent / "README.txt"
         if readme.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(readme)))
             return
         QMessageBox.information(
             self, "README não encontrado",
-            "O arquivo README.md não foi encontrado.")
+            "O arquivo README.txt não foi encontrado.")
 
     def _copy_diagnostic(self) -> None:
         diagnostic = (
-            f"Tethys {self.VERSION}\n"
-            "Python + PySide6\n"
+            f"Tethys System {self.VERSION}\n"
             f"Diretório: {Path.cwd()}"
         )
         QApplication.clipboard().setText(diagnostic)
@@ -474,9 +428,8 @@ class TethysCloseDialog(QMessageBox):
                 print(f"[Dialog] Erro ao carregar arquivo local: {e}")
         
         if not icon_loaded:
-            # Sem ícone padrão para evitar o som de informação do Windows.
-            self.setIcon(QMessageBox.Icon.NoIcon)
-            print("[Dialog] Dialogo sem icone do sistema")
+            self.setIcon(QMessageBox.Icon.Warning)
+            print("[Dialog] Ícone local indisponível; usando ícone padrão")
         
         if icon_path:
             self.setWindowIcon(QIcon(icon_path))
@@ -631,7 +584,7 @@ class WuwaQtWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.preferences = QSettings("Tethys", "Tethys")
-        self.setWindowTitle("Tethys | PySide6")
+        self.setWindowTitle("Tethys System")
         self.setWindowFlags(
             Qt.WindowType.Window
             | Qt.WindowType.WindowTitleHint
@@ -643,7 +596,11 @@ class WuwaQtWindow(QMainWindow):
         self.background_label.setObjectName("appBackground")
         self.background_label.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        acrylic_blur = QGraphicsBlurEffect(self.background_label)
+        acrylic_blur.setBlurRadius(18)
+        self.background_label.setGraphicsEffect(acrylic_blur)
         self.background_label.lower()
+        self._background_cache_key: tuple[str, bool, int, int] | None = None
 
         shell = QWidget()
         shell.setObjectName("appShell")
@@ -655,14 +612,14 @@ class WuwaQtWindow(QMainWindow):
         header.setObjectName("appHeader")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(16, 10, 16, 10)
-        header_layout.addWidget(TitleLabel("Tethys"))
+        header_layout.addWidget(TitleLabel("Tethys System"))
         header_layout.addStretch(1)
 
         self.character_id_entry = QLineEdit()
         self.character_id_entry.setPlaceholderText("Digite o nome do(a) personagem...")
         self.character_id_entry.setFixedWidth(210)
 
-        self.character_load_button = QPushButton("Carregar Personagem / ID")
+        self.character_load_button = QPushButton("Buscar")
         self.character_load_button.setObjectName("primaryAction")
 
         self.import_button = QPushButton("Carregar Stats")
@@ -682,24 +639,45 @@ class WuwaQtWindow(QMainWindow):
         tabs.setObjectName("mainTabs")
         tabs.tabBar().hide()
         
-        # Pré-carrega o banner antes de criar a HomeTab
-        print("[WuwaQtWindow] Iniciando pré-carregamento do banner...")
-        preloaded_banner = _preload_banner_sync()
-        print(f"[WuwaQtWindow] Banner pré-carregado: {preloaded_banner is not None}")
-        
-        home_tab = HomeTab(preloaded_banner=preloaded_banner)
-        history_tab = HistoryTab()
+        def build_home() -> QWidget:
+            from app.home_tab import HomeTab
+            return HomeTab()
 
-        tabs.addTab(home_tab, "Home")
-        tabs.addTab(TeamsTab(), "Teams")
-        tabs.addTab(history_tab, "Histórico")
-        tabs.addTab(MultimediaTab(), "Multimídia")
-        tabs.addTab(PlaceholderTab(
-            "Fontes de dados",
-            "Tela preparada para exibir fontes, "
-            "cache e estado das integrações."), "Fontes de dados")
+        def build_teams() -> QWidget:
+            from app.teams_tab import TeamsTab
+            return TeamsTab()
 
+        def build_history() -> QWidget:
+            from app.history_tab import HistoryTab
+            return HistoryTab()
+
+        def build_multimedia() -> QWidget:
+            from app.multimedia_tab import MultimediaTab
+            return MultimediaTab()
+
+        self._tab_factories = (
+            build_home,
+            build_teams,
+            build_history,
+            build_multimedia,
+            lambda: PlaceholderTab(
+                "Fontes de dados",
+                "Tela preparada para exibir fontes, "
+                "cache e estado das integrações."),
+        )
+        self._tab_titles = ("Home", "Teams", "Histórico", "Mapeamento de Frequências", "Fontes de dados")
+        self._tab_widgets: dict[int, QWidget] = {}
+        self._active_main_index: int | None = None
         self.tabs = tabs
+        for title in self._tab_titles:
+            tabs.addTab(QWidget(), title)
+        multimedia_tab = build_multimedia()
+        tabs.removeTab(3)
+        tabs.insertTab(3, multimedia_tab, self._tab_titles[3])
+        self._tab_widgets[3] = multimedia_tab
+        tabs.currentChanged.connect(self._handle_main_tab_changed)
+        self._handle_main_tab_changed(0)
+
         self.character_tabs: dict[str, ResonatorTab] = {}
         self.sidebar_buttons: dict[str, QPushButton] = {}
 
@@ -716,7 +694,7 @@ class WuwaQtWindow(QMainWindow):
         for index, label in enumerate(("⌂   Home",
                                        "♣   Teams",
                                        "◷   Histórico",
-                                       "▣   Multimídia")):
+                                       "⌁   Frequências")):
             self._add_sidebar_button(self.sidebar_layout, label, index)
         self.sidebar_layout.addSpacing(10)
         self.character_sidebar_layout = QVBoxLayout()
@@ -752,17 +730,28 @@ class WuwaQtWindow(QMainWindow):
         self.preferences.sync()
         background = self.preferences.value("background", True, type=bool)
         wallpaper = self.preferences.value("wallpaper", "", type=str)
+        interface_opacity = self.preferences.value("interface_opacity", 85, type=int)
+        accent_theme = self.preferences.value("accent_theme", "Ciano Tethys", type=str)
         app = QApplication.instance()
 
         if app is not None:
             app.setStyleSheet(application_qss(
-                show_background=background, wallpaper=wallpaper))
+                show_background=background,
+                wallpaper=wallpaper,
+                interface_opacity=interface_opacity,
+                accent_theme=accent_theme,
+            ))
         refresh_glows(self)
         self._update_background(background, wallpaper)
 
     def _update_background(self, enabled: bool, wallpaper: str) -> None:
         self.background_label.setVisible(enabled)
         if not enabled:
+            self._background_cache_key = None
+            return
+
+        cache_key = (wallpaper, enabled, self.width(), self.height())
+        if cache_key == self._background_cache_key:
             return
 
         source = (
@@ -788,6 +777,7 @@ class WuwaQtWindow(QMainWindow):
         self.background_label.setPixmap(
             scaled.copy(left, top, self.width(), self.height()))
         self.background_label.lower()
+        self._background_cache_key = cache_key
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
@@ -819,6 +809,14 @@ class WuwaQtWindow(QMainWindow):
         button.setObjectName("nav")
         if element:
             button.setProperty("element", element)
+            background, border, text, hover = ELEMENT_NAV_COLORS.get(
+                element, ELEMENT_NAV_COLORS["Spectro"]
+            )
+            button.setStyleSheet(
+                f"QPushButton {{ background: {background}; color: {text}; "
+                f"border: 1px solid {border}; border-radius: 7px; padding: 10px; }}"
+                f"QPushButton:hover {{ background: {hover}; border: 1px solid {border}; }}"
+            )
         if tab_index is not None:
             button.clicked.connect(
                 lambda: self._select_main_tab(tab_index, label))
@@ -847,6 +845,55 @@ class WuwaQtWindow(QMainWindow):
         self.tabs.setCurrentIndex(index)
         self._set_sidebar_active(label)
 
+    def _ensure_main_tab(self, index: int) -> None:
+        if index < 0 or index >= len(self._tab_factories):
+            return
+        if index in self._tab_widgets:
+            return
+        factory = self._tab_factories[index]
+        widget = factory()
+        old_widget = self.tabs.widget(index)
+        self._tab_widgets[index] = widget
+        self.tabs.blockSignals(True)
+        self.tabs.removeTab(index)
+        self.tabs.insertTab(index, widget, self._tab_titles[index])
+        self.tabs.blockSignals(False)
+        if old_widget is not None:
+            old_widget.deleteLater()
+        self.tabs.setCurrentIndex(index)
+
+    def _handle_main_tab_changed(self, index: int) -> None:
+        current_widget = self.tabs.widget(index)
+        if isinstance(current_widget, ResonatorTab):
+            previous_index = self._active_main_index
+            if previous_index is not None and previous_index != index:
+                previous_widget = self.tabs.widget(previous_index)
+                if previous_widget is not None:
+                    if hasattr(previous_widget, "set_active"):
+                        previous_widget.set_active(False)
+                    previous_widget.setUpdatesEnabled(False)
+            current_widget.setUpdatesEnabled(True)
+            current_widget.show()
+            current_widget.update()
+            self._active_main_index = index
+            return
+        previous_index = self._active_main_index
+        if previous_index is not None and previous_index != index:
+            previous_widget = self._tab_widgets.get(previous_index)
+            if previous_widget is not None:
+                if hasattr(previous_widget, "set_active"):
+                    previous_widget.set_active(False)
+                previous_widget.setUpdatesEnabled(False)
+        self._ensure_main_tab(index)
+        current_widget = self._tab_widgets.get(index)
+        if current_widget is not None:
+            current_widget.setUpdatesEnabled(True)
+            if hasattr(current_widget, "set_active"):
+                current_widget.set_active(True)
+            current_widget.show()
+            current_widget.update()
+        self._active_main_index = index
+
     def _set_sidebar_active(self, active_label: str) -> None:
         for label, button in self.sidebar_buttons.items():
             button.setObjectName("navActive"
@@ -861,6 +908,17 @@ class WuwaQtWindow(QMainWindow):
             char for char in unicodedata.normalize("NFKD", value.casefold())
             if not unicodedata.combining(char))
         return re.sub(r"[^a-z0-9]+", "", folded)
+
+    @staticmethod
+    def _element_icon(element: str | None) -> str:
+        return {
+            "Aero": "◈",
+            "Glacio": "❄",
+            "Electro": "✦",
+            "Fusion": "♢",
+            "Havoc": "◉",
+            "Spectro": "✧",
+        }.get(str(element), "◆")
 
     def open_character_tab(self) -> None:
         target = self._normalize_character_id(self.character_id_entry.text())
@@ -878,19 +936,24 @@ class WuwaQtWindow(QMainWindow):
             sources_index = self.tabs.count() - 1
             self.tabs.insertTab(sources_index,
                                 character_tab,
-                                f"◆ {character_id.replace(':', ' ').title()}")
-            label = character_id.replace(":", " ").title()
+                                character_id.title())
+            label = character_id.title()
+            element = CHARACTER_ELEMENTS.get(character_id)
+            self.tabs.setTabText(
+                sources_index,
+                f"{self._element_icon(element)} {label}",
+            )
             self._add_sidebar_button(
                 self.character_sidebar_layout,
-                f"◆   {label}",
+                f"{self._element_icon(element)}   {label}",
                 self.tabs.indexOf(character_tab),
-                CHARACTER_ELEMENTS.get(character_id),
+                element,
             )
 
         self.tabs.setCurrentWidget(character_tab)
         self._set_sidebar_active(
-            f"◆   {character_id.replace(':', ' ').title()}")
-        self.character_status.setText(f"{character_id} carregado")
+            f"{self._element_icon(CHARACTER_ELEMENTS.get(character_id))}   {character_id.title()}")
+        self.character_status.clear()
 
 
 class ImportDialog(QDialog):
@@ -1031,8 +1094,14 @@ def main() -> int:
     settings = QSettings("Tethys", "Tethys")
     background = settings.value("background", True, type=bool)
     wallpaper = settings.value("wallpaper", "", type=str)
+    interface_opacity = settings.value("interface_opacity", 85, type=int)
+    accent_theme = settings.value("accent_theme", "Ciano Tethys", type=str)
     app.setStyleSheet(application_qss(
-        show_background=background, wallpaper=wallpaper))
+        show_background=background,
+        wallpaper=wallpaper,
+        interface_opacity=interface_opacity,
+        accent_theme=accent_theme,
+    ))
     window = WuwaQtWindow()
     window.show()
     return app.exec()

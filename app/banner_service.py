@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import os
 import time
@@ -11,6 +12,17 @@ from urllib.error import URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
+
+_print = builtins.print
+
+
+def _debug_print(*args: object, **kwargs: object) -> None:
+    if os.environ.get("TETHYS_DEBUG_BANNER") == "1":
+        _print(*args, **kwargs)
+
+
+print = _debug_print
+
 DEFAULT_API_URL = (
     "https://gist.githubusercontent.com/yloove7/"
     "b1440f18d4c1152f9f3914fbdb2b7b14/raw/gistfile1.txt"
@@ -18,7 +30,7 @@ DEFAULT_API_URL = (
 API_URL = os.environ.get("TETHYS_BANNER_API_URL", DEFAULT_API_URL)
 
 
-def _request_bytes(url: str, cache_bust: bool = False) -> bytes:
+def _request_bytes(url: str, cache_bust: bool = False, timeout: int = 8) -> bytes:
     if cache_bust:
         parts = urlsplit(url)
         query = dict(parse_qsl(parts.query))
@@ -30,7 +42,7 @@ def _request_bytes(url: str, cache_bust: bool = False) -> bytes:
         url,
         headers={
             "User-Agent": (
-                "Tethys/1.0 (Windows NT 10.0; Win64; x64) "
+                "Tethys v1.4"
                 "AppleWebKit/537.36"
             ),
             "Accept": "application/json, image/avif, image/webp, image/*, */*",
@@ -38,7 +50,7 @@ def _request_bytes(url: str, cache_bust: bool = False) -> bytes:
         },
     )
     try:
-        with urlopen(request, timeout=12) as response:  # nosec B310
+        with urlopen(request, timeout=timeout) as response:  # nosec B310
             data = response.read()
             print(f"[_request_bytes] [OK] Recebido {len(data)} bytes")
             return data
@@ -192,7 +204,7 @@ def fetch_current_banner() -> dict[str, Any] | None:
     try:
         print("[Banner Service] Iniciando fetch...")
         payload = json.loads(
-            _request_bytes(API_URL, cache_bust=True).decode("utf-8")
+            _request_bytes(API_URL, timeout=6).decode("utf-8")
         )
         print(f"[Banner Service] Payload recebido: {type(payload)}")
         
@@ -203,7 +215,7 @@ def fetch_current_banner() -> dict[str, Any] | None:
             raise ValueError("No active banner in API response")
         
         print(f"[Banner Service] Carregando imagem de: {banner.get('image_url')}")
-        image_bytes = _request_bytes(banner["image_url"])
+        image_bytes = _request_bytes(banner["image_url"], timeout=8)
         print(f"[Banner Service] Imagem carregada: {len(image_bytes)} bytes")
         
         banner["image_bytes"] = image_bytes

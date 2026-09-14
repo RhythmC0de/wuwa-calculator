@@ -1,6 +1,13 @@
-PySide6>=6.7
+# UI e Renderização de Gráficos (Alta Performance)
+PySide6>=6.7.0
+pyqtgraph>=0.13.7
+
+# Processamento de Imagem e Vídeo
 opencv-python>=4.8.0
 pillow>=10.0.0
+protobuf>=3.20.2,<4.0.0
+
+# Motores de OCR (RapidOCR como Primário, Paddle como Fallback)
+rapidocr-onnxruntime>=1.2.3
 paddlepaddle>=2.6.0
 paddleocr>=2.7.3
-shapely>=2.0.0

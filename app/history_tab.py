@@ -4,13 +4,17 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSignalBlocker, Qt, QTimer
+from PySide6.QtCore import QSignalBlocker, QUrl, Qt, QTimer
+from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QSlider, QSplitter, QTableWidget, QVBoxLayout, QWidget,
+    QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QSlider, QSplitter, QTableWidget, QVBoxLayout, QWidget,
+    QStyledItemDelegate,
 )
 
 from app.components import Card, DataTable, MetricCard, TitleLabel
+from app.teams_tab import CharacterBadgeWidget
 from app.backend_adapter import (
     ROTATION_HISTORY_FILE,
     export_history_file,
@@ -20,6 +24,35 @@ from app.backend_adapter import (
 )
 from app.styles import apply_glow
 from storage.team_storage import load_teams
+from data.images import CHARACTER_IMAGE_FALLBACKS
+from app.security_policy import allows_remote_content
+
+
+class DamageBarDelegate(QStyledItemDelegate):
+    def paint(self, painter: QPainter, option, index) -> None:
+        value = index.data(Qt.ItemDataRole.DisplayRole)
+        try:
+            numeric = max(0.0, float(str(value).replace(",", "")))
+        except (TypeError, ValueError):
+            numeric = 0.0
+        maximum = 1.0
+        model = index.model()
+        for row in range(model.rowCount()):
+            try:
+                maximum = max(maximum, float(str(model.index(row, index.column()).data()).replace(",", "")))
+            except (TypeError, ValueError):
+                continue
+        painter.save()
+        bar = option.rect.adjusted(6, option.rect.height() // 2 - 3, -6, -(option.rect.height() // 2 - 3))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(38, 48, 62, 180))
+        painter.drawRoundedRect(bar, 3, 3)
+        filled = bar.adjusted(0, 0, -int(bar.width() * (1 - min(1.0, numeric / maximum))), 0)
+        painter.setBrush(QColor(67, 219, 193, 145))
+        painter.drawRoundedRect(filled, 3, 3)
+        painter.setPen(QColor("#F2F0FF"))
+        painter.drawText(option.rect.adjusted(10, 0, -8, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, str(value))
+        painter.restore()
 
 # The active history player is QtMultimedia-based. The private legacy class
 # below is retained only for source compatibility and is never instantiated.
@@ -319,7 +352,41 @@ class HistoryTab(QWidget):
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
-        left_layout.addWidget(RotationForm(self))
+        team_summary = Card()
+        team_summary.setObjectName("historyTeamSummary")
+        team_layout = QVBoxLayout(team_summary)
+        team_layout.setContentsMargins(14, 12, 14, 12)
+        team_layout.addWidget(TitleLabel("Equipe ativa"))
+        self.team_summary_label = QLabel("Selecione uma equipe para visualizar a composição")
+        self.team_summary_label.setObjectName("historyTeamMembers")
+        self.team_summary_label.setWordWrap(True)
+        team_layout.addWidget(self.team_summary_label)
+        self.team_badges_layout = QHBoxLayout()
+        self.team_badges_layout.setSpacing(8)
+        team_layout.addLayout(self.team_badges_layout)
+        left_layout.addWidget(team_summary)
+
+        quick = QFrame()
+        quick.setObjectName("historyQuickMetrics")
+        quick_layout = QHBoxLayout(quick)
+        quick_layout.setContentsMargins(0, 0, 0, 0)
+        self.quick_dps = QLabel("--")
+        self.quick_damage = QLabel("--")
+        for title, label in (("DPS TOTAL", self.quick_dps), ("DANO ACUMULADO", self.quick_damage)):
+            block = QFrame()
+            block.setObjectName("historyQuickMetric")
+            block_layout = QVBoxLayout(block)
+            block_layout.setContentsMargins(10, 8, 10, 8)
+            caption = QLabel(title)
+            caption.setObjectName("historyMetricCaption")
+            label.setObjectName("historyMetricValue")
+            block_layout.addWidget(caption)
+            block_layout.addWidget(label)
+            quick_layout.addWidget(block)
+        left_layout.addWidget(quick)
+        self.rotation_form_widget = RotationForm(self)
+        left_layout.addStretch(1)
+        left_layout.addWidget(self.rotation_form_widget)
         splitter.addWidget(left)
 
         right = QWidget()
@@ -334,6 +401,7 @@ class HistoryTab(QWidget):
         self.metrics: dict[str, MetricCard] = {}
         for key, title in (("theoretical", "Teórico"), ("practical", "Prático"), ("accuracy", "Taxa de Acerto"), ("delta", "Delta")):
             card = MetricCard(title)
+            card.setObjectName("historyStatCard")
             self.metrics[key] = card
             metrics.addWidget(card)
         analytics_layout.addLayout(metrics)
@@ -344,6 +412,10 @@ class HistoryTab(QWidget):
         audit_layout.setContentsMargins(16, 14, 16, 16)
         audit_layout.addWidget(TitleLabel("Auditoria de Habilidades | calculado versus jogabilidade"))
         self.audit_table = DataTable(("Personagem / Habilidade", "Tipo", "Não-crítico", "Crítico", "Esperado", "Prático", "Delta"))
+        self.audit_table.setObjectName("historyAuditTable")
+        self.audit_table.setAlternatingRowColors(True)
+        self.audit_table.setItemDelegateForColumn(4, DamageBarDelegate(self.audit_table))
+        self.audit_table.setItemDelegateForColumn(5, DamageBarDelegate(self.audit_table))
         audit_layout.addWidget(self.audit_table, 1)
         right_layout.addWidget(audit, 1)
 
@@ -352,14 +424,19 @@ class HistoryTab(QWidget):
         saved_layout.setContentsMargins(16, 14, 16, 16)
         saved_layout.addWidget(TitleLabel("Comparação salva"))
         self.saved_table = DataTable(("ID", "Equipe", "Rotação", "Dano total", "Data"))
+        self.saved_table.setObjectName("historySavedTable")
+        self.saved_table.setAlternatingRowColors(True)
         self.saved_table.cellClicked.connect(self.select_history)
         saved_layout.addWidget(self.saved_table)
         right_layout.addWidget(saved, 1)
         splitter.addWidget(right)
         splitter.setSizes([620, 720])
-        self.rotation_form = left_layout.itemAt(0).widget()
+        self.rotation_form = self.rotation_form_widget
+        self.team_network = QNetworkAccessManager(self)
+        self.team_image_replies: dict[str, object] = {}
         self.current_result: object | None = None
         self.refresh_team_names()
+        self.refresh_team_summary()
         self.refresh_history()
 
     def refresh_team_names(self) -> None:
@@ -371,6 +448,48 @@ class HistoryTab(QWidget):
         self.rotation_form.team_box.addItems(names)
         if current in names:
             self.rotation_form.team_box.setCurrentText(current)
+        self.rotation_form.team_box.currentTextChanged.connect(self.refresh_team_summary)
+
+    def refresh_team_summary(self, team_name: str | None = None) -> None:
+        selected = team_name or self.rotation_form.team_box.currentText()
+        teams = load_teams()
+        team = next((item for item in teams if str(item.get("name", "")) == selected), None)
+        characters = team.get("characters", []) if isinstance(team, dict) else []
+        names = [str(character).title() for character in characters[:3]] if isinstance(characters, list) else []
+        self.team_summary_label.setText("   ".join(f"◉ {name}" for name in names) or "Nenhum integrante configurado")
+        while self.team_badges_layout.count():
+            item = self.team_badges_layout.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        for character in characters[:3] if isinstance(characters, list) else []:
+            character_id = str(character).casefold()
+            images = CHARACTER_IMAGE_FALLBACKS.get(character_id, {})
+            badge = CharacterBadgeWidget()
+            self.team_badges_layout.addWidget(badge)
+            if isinstance(images, dict):
+                self._load_team_badge(str(images.get("char", "")), badge, "char")
+                self._load_team_badge(str(images.get("weapon", "")), badge, "weapon")
+        self.team_badges_layout.addStretch(1)
+
+    def _load_team_badge(self, url: str, badge: CharacterBadgeWidget, kind: str) -> None:
+        if not url or not allows_remote_content(url):
+            return
+        reply = self.team_network.get(QNetworkRequest(QUrl(url)))
+        self.team_image_replies[url] = reply
+        reply.finished.connect(lambda: self._finish_team_badge(reply, badge, kind, url))
+
+    def _finish_team_badge(self, reply: object, badge: CharacterBadgeWidget, kind: str, url: str) -> None:
+        try:
+            pixmap = QPixmap()
+            pixmap.loadFromData(reply.readAll())
+            if not pixmap.isNull():
+                if kind == "char":
+                    badge.set_pixmaps(char_pixmap=pixmap)
+                else:
+                    badge.set_pixmaps(weapon_pixmap=pixmap)
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+        self.team_image_replies.pop(url, None)
 
     def refresh_history(self) -> None:
         records = history_records()
@@ -404,6 +523,8 @@ class HistoryTab(QWidget):
         self.current_result = result
         theoretical = float(getattr(result, "rotation_damage", 0.0))
         self.metrics["theoretical"].value_label.setText(f"{theoretical:,.0f}")
+        self.quick_damage.setText(f"{theoretical:,.0f}")
+        self.quick_dps.setText(f"{theoretical:,.0f}")
         self.metrics["practical"].value_label.setText("--")
         self.metrics["accuracy"].value_label.setText("--")
         self.metrics["delta"].value_label.setText("--")
@@ -469,7 +590,7 @@ class HistoryTab(QWidget):
                 continue
             rows.append([
                 str(skill.get("skill", skill.get("name", "Habilidade"))),
-                str(skill.get("type", "")),
+                f"[{str(skill.get('type', 'Skill')).title()}]",
                 str(skill.get("noncrit", skill.get("non_critical", "--"))),
                 str(skill.get("crit", skill.get("critical", "--"))),
                 str(skill.get("expected", "--")),

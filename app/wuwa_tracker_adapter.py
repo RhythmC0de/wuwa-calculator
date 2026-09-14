@@ -1,11 +1,24 @@
 """Integração com WuwaTracker para dados de banners atualizados - Multi-source strategy."""
 
+import builtins
 import json
+import os
 import re
 from datetime import datetime, timezone, timedelta
 from typing import Any
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
+
+
+_print = builtins.print
+
+
+def _debug_print(*args: object, **kwargs: object) -> None:
+    if os.environ.get("TETHYS_DEBUG_BANNER") == "1":
+        _print(*args, **kwargs)
+
+
+print = _debug_print
 
 
 def fetch_current_banner_cascading() -> dict[str, Any] | None:

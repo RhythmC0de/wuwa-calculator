@@ -540,7 +540,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "rover: aero": {
+    "rover aero": {
         "kit_name": "Rover Aero",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
@@ -552,7 +552,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "rover: spectro": {
+    "rover spectro": {
         "kit_name": "Rover Spectro",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
@@ -564,7 +564,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "rover: glacio": {
+    "rover glacio": {
         "kit_name": "Rover Glacio",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
@@ -576,7 +576,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "rover: electro": {
+    "rover electro": {
         "kit_name": "Rover Electro",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
@@ -588,7 +588,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "rover: fusion": {
+    "rover fusion": {
         "kit_name": "Rover Fusion",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
@@ -600,7 +600,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "rover: havoc": {
+    "rover havoc": {
         "kit_name": "Rover Havoc",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
@@ -696,7 +696,7 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
     },
-    "xiangliyao": {
+    "xiangli yao": {
         "kit_name": "Xiangli Yao",
         "skills": [
             {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},

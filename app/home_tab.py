@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import builtins
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -9,10 +11,11 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from PySide6.QtCore import QByteArray, QObject, QThread, QTimer, Qt, Signal
-from PySide6.QtGui import QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import QByteArray, QObject, QEvent, QThread, QTimer, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -24,6 +27,18 @@ from PySide6.QtWidgets import (
 from app.components import Card, TitleLabel, WuWaKuroBannerCard
 from app.banner_service import fetch_current_banner
 from app.styles import apply_glow
+from storage.banner_cache import load_cached_banner, save_cached_banner
+
+
+_print = builtins.print
+
+
+def _debug_print(*args: object, **kwargs: object) -> None:
+    if os.environ.get("TETHYS_DEBUG_BANNER") == "1":
+        _print(*args, **kwargs)
+
+
+print = _debug_print
 
 
 def _rounded_banner_pixmap(source: QPixmap, width: int, height: int, radius: int = 12) -> QPixmap:
@@ -45,12 +60,64 @@ def _rounded_banner_pixmap(source: QPixmap, width: int, height: int, radius: int
     return canvas
 
 
+def _full_banner_pixmap(
+    source: QPixmap,
+    width: int,
+    height: int,
+    radius: int = 16,
+    vertical_offset: int = 0,
+) -> QPixmap:
+    scaled = source.scaled(
+        width, height, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    canvas = QPixmap(width, height)
+    canvas.fill(QColor("#0C101E"))
+    painter = QPainter(canvas)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+    path = QPainterPath()
+    path.addRoundedRect(
+        QRectF(0, 0, width, height).adjusted(2, 2, -2, -2),
+        max(0, radius - 2),
+        max(0, radius - 2),
+    )
+    painter.setClipPath(path)
+    x = (width - scaled.width()) // 2
+    centered_y = (height - scaled.height()) // 2
+    y = min(0, centered_y + vertical_offset)
+    painter.drawPixmap(x, y, scaled)
+    painter.end()
+    return canvas
+
+
+def _apply_rounded_image_mask(widget: QLabel, radius: int = 16) -> None:
+    mask = QPixmap(widget.size())
+    mask.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(mask)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    path = QPainterPath()
+    path.addRoundedRect(
+        QRectF(0, 0, widget.width(), widget.height()).adjusted(2, 2, -2, -2),
+        max(0, radius - 2),
+        max(0, radius - 2),
+    )
+    painter.fillPath(path, QColor(Qt.GlobalColor.white))
+    painter.end()
+    widget.setMask(mask.createMaskFromColor(
+        QColor(Qt.GlobalColor.transparent),
+        Qt.MaskMode.MaskInColor,
+    ))
+
+
 class BannerWorker(QObject):
     finished = Signal(object)
 
     def run(self) -> None:
         print("[BannerWorker] Iniciando trabalho...")
         result = fetch_current_banner()
+        if isinstance(result, dict):
+            save_cached_banner(result)
         print(f"[BannerWorker] Resultado: {type(result)} - {result if not isinstance(result, dict) else 'dict com dados'}")
         self.finished.emit(result)
 
@@ -68,48 +135,97 @@ class UpcomingBannerCard(QFrame):
                  compact: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("upcomingBannerPastCard" if compact else "upcomingBannerCard")
-        self.setFixedSize(340, 96) if compact else self.setFixedSize(280, 128)
-        layout = QHBoxLayout(self) if compact else QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
+        self.setFixedSize(320, 128)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setProperty("hovered", False)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        _apply_rounded_image_mask(self, radius=16)
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(10)
+        shadow.setOffset(0, 0)
+        shadow.setColor(QColor(0, 0, 0, 125))
+        self.setGraphicsEffect(shadow)
 
-        image = QLabel()
+        image = QLabel(self)
         image.setObjectName("upcomingBannerImage")
-        image.setFixedSize(150, 78) if compact else image.setFixedSize(264, 54)
-        image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        image_margin = 2
+        image.setGeometry(
+            image_margin,
+            image_margin,
+            self.width() - image_margin * 2,
+            self.height() - image_margin * 2,
+        )
+        image.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        image.setScaledContents(False)
         image_bytes = record.get("image_bytes", b"")
         pixmap = QPixmap()
         if isinstance(image_bytes, bytes):
             pixmap.loadFromData(QByteArray(image_bytes))
         if not pixmap.isNull():
-            image.setPixmap(_rounded_banner_pixmap(
-                pixmap, image.width(), image.height(), radius=12
+            image.setPixmap(_full_banner_pixmap(
+                pixmap,
+                image.width(),
+                image.height(),
+                radius=14,
+                vertical_offset=14,
             ))
         else:
             image.setText("Esperando anúncio oficial")
             image.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(image)
 
-        details_layout = QVBoxLayout()
-        details_layout.setSpacing(3)
-        if not compact:
-            badge = QLabel(state)
-            badge.setObjectName("upcomingBannerBadge")
-            details_layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
+        overlay = QFrame(self)
+        overlay.setObjectName("upcomingBannerOverlay")
+        overlay_width = 180
+        overlay.setGeometry(10, self.height() - 50, overlay_width, 40)
+        overlay_layout = QVBoxLayout(overlay)
+        overlay_layout.setContentsMargins(7, 3, 7, 3)
+        overlay_layout.setSpacing(0)
 
-        name = QLabel(str(record.get("name", "Aguardando anúncio oficial")))
+        name = QLabel(str(record.get("name", "Aguardando anúncio oficial")), overlay)
         name.setObjectName("upcomingBannerName")
-        name.setWordWrap(True)
-        details_layout.addWidget(name)
+        overlay_layout.addWidget(name)
 
         details = QLabel(
             f"Raridade: ★{int(record.get('rarity', 5) or 5)}\n"
             f"{record.get('date_label', 'Data: Próximo banner')}"
-        )
+        , overlay)
         details.setObjectName("upcomingBannerDetails")
-        details_layout.addWidget(details)
-        details_layout.addStretch(1)
-        layout.addLayout(details_layout, 1)
+        overlay_layout.addWidget(details)
+        image.lower()
+        overlay.raise_()
+
+        self.hover_frame = QFrame(self)
+        self.hover_frame.setGeometry(0, 0, self.width(), self.height())
+        self.hover_frame.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hover_frame.setStyleSheet(
+            "QFrame { background: transparent; border: 3px solid #00F5FF; "
+            "border-radius: 16px; }"
+        )
+        self.hover_frame.hide()
+        self.hover_frame.raise_()
+        image.installEventFilter(self)
+        overlay.installEventFilter(self)
+
+    def _set_hovered(self, hovered: bool) -> None:
+        self.hover_frame.setVisible(hovered)
+        self.setProperty("hovered", hovered)
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Type.Enter:
+            self._set_hovered(True)
+        elif event.type() == QEvent.Type.Leave:
+            self._set_hovered(False)
+        return super().eventFilter(watched, event)
+
+    def enterEvent(self, event) -> None:
+        self._set_hovered(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._set_hovered(False)
+        super().leaveEvent(event)
 
 
 class UpcomingBannersSection(QFrame):
@@ -182,7 +298,9 @@ class HomeTab(QWidget):
         intro_layout.addWidget(subtitle)
         root.addWidget(intro)
 
-        self.banner_data: dict[str, object] | None = preloaded_banner
+        cached_banner = load_cached_banner() if preloaded_banner is None else None
+        initial_banner = preloaded_banner or cached_banner
+        self.banner_data: dict[str, object] | None = initial_banner
         self.banner_thread: QThread | None = None
         self.banner_worker: BannerWorker | None = None
         self.catalog_thread: QThread | None = None
@@ -202,9 +320,10 @@ class HomeTab(QWidget):
         self.banner_container = root
         
         # Se já tem banner pré-carregado, mostra imediatamente
-        if preloaded_banner:
+        if initial_banner:
             print("[HomeTab] Banner pré-carregado recebido, criando card imediatamente...")
-            self._banner_loaded(preloaded_banner)
+            self._banner_loaded(initial_banner)
+            QTimer.singleShot(0, self._start_banner_refresh)
         else:
             # Caso contrário, mostra placeholder e carrega em background
             root.addWidget(self.banner_placeholder)
@@ -218,6 +337,10 @@ class HomeTab(QWidget):
         root.addWidget(self.timeline_panel)
         QTimer.singleShot(0, self._start_catalog_refresh)
         root.addStretch(1)
+
+    def set_active(self, active: bool) -> None:
+        if self.banner_card is not None:
+            self.banner_card.set_active(active)
 
     def _start_catalog_refresh(self) -> None:
         self.catalog_thread = QThread(self)
@@ -328,6 +451,11 @@ class HomeTab(QWidget):
             self.banner_container.removeWidget(self.banner_placeholder)
             self.banner_placeholder.deleteLater()
             self.banner_placeholder = None
+
+        if self.banner_card is not None:
+            self.banner_container.removeWidget(self.banner_card)
+            self.banner_card.deleteLater()
+            self.banner_card = None
         
         print("[HomeTab] Criando WuWaKuroBannerCard...")
         self.banner_card = WuWaKuroBannerCard(

@@ -156,11 +156,29 @@ CHARACTER_QUOTES: dict[str, tuple[str, ...]] = {
     "suisui": (
         "A fluidez das águas que contornam qualquer obstáculo.",
     ),
-    "xiangliyao": (
+    "xiangli yao": (
         "Reconfiguração de lógica e inovação.",
+    ),
+    "xuanling": (
+        "A harmonia do vento e da natureza.",
+    ),
+    "yangyang xuanling": (
+        "O vento sussurra sobre coisas perdidas no tempo.",
+    ),
+    "zani": (
+        "A chama selvagem que queima em silêncio.",
     ),
     "zhezhi": (
         "Pintando a realidade com sonhos.",
+    ),
+    "cantarella": (
+        "Harmonia nas sombras, beleza no caos.",
+    ),
+    "lumi": (
+        "A luz que ilumina os caminhos da verdade.",
+    ),
+    "lupa": (
+        "A chama selvagem que queima as correntes.",
     ),
 
     # Rover variants share the same character lines.
@@ -169,32 +187,32 @@ CHARACTER_QUOTES: dict[str, tuple[str, ...]] = {
         "Você vai obedecer!",
         "Eu sou a tempestade.",
     ),
-    "rover: aero": (
+    "rover aero": (
         "Ninguém vai sussurrar!",
         "Você vai obedecer!",
         "Eu sou a tempestade.",
     ),
-    "rover: spectro": (
+    "rover spectro": (
         "Ninguém vai sussurrar!",
         "Você vai obedecer!",
         "Eu sou a tempestade.",
     ),
-    "rover: glacio": (
+    "rover glacio": (
         "Ninguém vai sussurrar!",
         "Você vai obedecer!",
         "Eu sou a tempestade.",
     ),
-    "rover: electro": (
+    "rover electro": (
         "Ninguém vai sussurrar!",
         "Você vai obedecer!",
         "Eu sou a tempestade.",
     ),
-    "rover: fusion": (
+    "rover fusion": (
         "Ninguém vai sussurrar!",
         "Você vai obedecer!",
         "Eu sou a tempestade.",
     ),
-    "rover: havoc": (
+    "rover havoc": (
         "Ninguém vai sussurrar!",
         "Você vai obedecer!",
         "Eu sou a tempestade.",
