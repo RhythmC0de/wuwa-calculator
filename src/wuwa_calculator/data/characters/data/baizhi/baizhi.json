@@ -1,0 +1,17 @@
+{
+    "id": "baizhi",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "baizhi/basic_attack",
+        "resonance_skill": "baizhi/resonance_skill",
+        "resonance_liberation": "baizhi/resonance_liberation",
+        "forte_circuit": "baizhi/forte_circuit",
+        "intro_skill": "baizhi/intro_skill",
+        "outro_skill": "baizhi/outro_skill"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "carlotta",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "carlotta/basic_attack",
+        "resonance_skill": "carlotta/resonance_skill",
+        "resonance_liberation": "carlotta/resonance_liberation",
+        "forte_circuit": "carlotta/forte_circuit",
+        "intro_skill": "carlotta/intro_skill",
+        "outro_skill": "carlotta/outro_skill"
+    }
+}

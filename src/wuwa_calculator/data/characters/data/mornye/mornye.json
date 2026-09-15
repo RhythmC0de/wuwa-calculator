@@ -1,0 +1,17 @@
+{
+    "id": "mornye",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "mornye/basic_attack",
+        "resonance_skill": "mornye/resonance_skill",
+        "resonance_liberation": "mornye/resonance_liberation",
+        "forte_circuit": "mornye/forte_circuit",
+        "intro_skill": "mornye/intro_skill",
+        "outro_skill": "mornye/outro_skill"
+    }
+}

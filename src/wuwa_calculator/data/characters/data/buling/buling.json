@@ -1,0 +1,17 @@
+{
+    "id": "buling",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "buling/basic_attack",
+        "resonance_skill": "buling/resonance_skill",
+        "resonance_liberation": "buling/resonance_liberation",
+        "forte_circuit": "buling/forte_circuit",
+        "intro_skill": "buling/intro_skill",
+        "outro_skill": "buling/outro_skill"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "mortefi",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "mortefi/basic_attack",
+        "resonance_skill": "mortefi/resonance_skill",
+        "resonance_liberation": "mortefi/resonance_liberation",
+        "forte_circuit": "mortefi/forte_circuit",
+        "intro_skill": "mortefi/intro_skill",
+        "outro_skill": "mortefi/outro_skill"
+    }
+}

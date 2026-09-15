@@ -1,0 +1,17 @@
+{
+    "id": "lynae",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "lynae/basic_attack",
+        "resonance_skill": "lynae/resonance_skill",
+        "resonance_liberation": "lynae/resonance_liberation",
+        "forte_circuit": "lynae/forte_circuit",
+        "intro_skill": "lynae/intro_skill",
+        "outro_skill": "lynae/outro_skill"
+    }
+}

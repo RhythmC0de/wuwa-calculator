@@ -1,0 +1,17 @@
+{
+    "id": "aemeath",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "aemeath/basic_attack",
+        "resonance_skill": "aemeath/resonance_skill",
+        "resonance_liberation": "aemeath/resonance_liberation",
+        "forte_circuit": "aemeath/forte_circuit",
+        "intro_skill": "aemeath/intro_skill",
+        "outro_skill": "aemeath/outro_skill"
+    }
+}

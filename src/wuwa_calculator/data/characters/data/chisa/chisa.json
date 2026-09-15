@@ -1,0 +1,17 @@
+{
+    "id": "chisa",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "chisa/basic_attack",
+        "resonance_skill": "chisa/resonance_skill",
+        "resonance_liberation": "chisa/resonance_liberation",
+        "forte_circuit": "chisa/forte_circuit",
+        "intro_skill": "chisa/intro_skill",
+        "outro_skill": "chisa/outro_skill"
+    }
+}

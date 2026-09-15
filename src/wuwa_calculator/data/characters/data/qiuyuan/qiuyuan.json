@@ -1,0 +1,17 @@
+{
+    "id": "qiuyuan",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "qiuyuan/basic_attack",
+        "resonance_skill": "qiuyuan/resonance_skill",
+        "resonance_liberation": "qiuyuan/resonance_liberation",
+        "forte_circuit": "qiuyuan/forte_circuit",
+        "intro_skill": "qiuyuan/intro_skill",
+        "outro_skill": "qiuyuan/outro_skill"
+    }
+}

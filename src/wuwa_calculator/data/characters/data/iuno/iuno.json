@@ -1,0 +1,17 @@
+{
+    "id": "iuno",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "iuno/basic_attack",
+        "resonance_skill": "iuno/resonance_skill",
+        "resonance_liberation": "iuno/resonance_liberation",
+        "forte_circuit": "iuno/forte_circuit",
+        "intro_skill": "iuno/intro_skill",
+        "outro_skill": "iuno/outro_skill"
+    }
+}

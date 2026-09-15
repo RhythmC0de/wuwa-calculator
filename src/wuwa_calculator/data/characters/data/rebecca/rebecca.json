@@ -1,0 +1,17 @@
+{
+    "id": "rebecca",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "rebecca/basic_attack",
+        "resonance_skill": "rebecca/resonance_skill",
+        "resonance_liberation": "rebecca/resonance_liberation",
+        "forte_circuit": "rebecca/forte_circuit",
+        "intro_skill": "rebecca/intro_skill",
+        "outro_skill": "rebecca/outro_skill"
+    }
+}

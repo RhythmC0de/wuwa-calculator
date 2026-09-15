@@ -1,0 +1,17 @@
+{
+    "id": "chixia",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "chixia/basic_attack",
+        "resonance_skill": "chixia/resonance_skill",
+        "resonance_liberation": "chixia/resonance_liberation",
+        "forte_circuit": "chixia/forte_circuit",
+        "intro_skill": "chixia/intro_skill",
+        "outro_skill": "chixia/outro_skill"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "jinshi",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "jinshi/basic_attack",
+        "resonance_skill": "jinshi/resonance_skill",
+        "resonance_liberation": "jinshi/resonance_liberation",
+        "forte_circuit": "jinshi/forte_circuit",
+        "intro_skill": "jinshi/intro_skill",
+        "outro_skill": "jinshi/outro_skill"
+    }
+}

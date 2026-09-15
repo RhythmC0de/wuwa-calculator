@@ -1,0 +1,17 @@
+{
+    "id": "encore",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "encore/basic_attack",
+        "resonance_skill": "encore/resonance_skill",
+        "resonance_liberation": "encore/resonance_liberation",
+        "forte_circuit": "encore/forte_circuit",
+        "intro_skill": "encore/intro_skill",
+        "outro_skill": "encore/outro_skill"
+    }
+}

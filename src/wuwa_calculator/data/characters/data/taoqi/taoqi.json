@@ -1,0 +1,17 @@
+{
+    "id": "taoqi",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "taoqi/basic_attack",
+        "resonance_skill": "taoqi/resonance_skill",
+        "resonance_liberation": "taoqi/resonance_liberation",
+        "forte_circuit": "taoqi/forte_circuit",
+        "intro_skill": "taoqi/intro_skill",
+        "outro_skill": "taoqi/outro_skill"
+    }
+}

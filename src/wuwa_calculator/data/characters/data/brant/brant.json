@@ -1,0 +1,17 @@
+{
+    "id": "brant",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "brant/basic_attack",
+        "resonance_skill": "brant/resonance_skill",
+        "resonance_liberation": "brant/resonance_liberation",
+        "forte_circuit": "brant/forte_circuit",
+        "intro_skill": "brant/intro_skill",
+        "outro_skill": "brant/outro_skill"
+    }
+}

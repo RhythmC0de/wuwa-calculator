@@ -1,0 +1,17 @@
+{
+    "id": "yangyang_xuanling",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "yangyang_xuanling/basic_attack",
+        "resonance_skill": "yangyang_xuanling/resonance_skill",
+        "resonance_liberation": "yangyang_xuanling/resonance_liberation",
+        "forte_circuit": "yangyang_xuanling/forte_circuit",
+        "intro_skill": "yangyang_xuanling/intro_skill",
+        "outro_skill": "yangyang_xuanling/outro_skill"
+    }
+}

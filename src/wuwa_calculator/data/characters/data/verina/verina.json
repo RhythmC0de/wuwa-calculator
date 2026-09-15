@@ -1,0 +1,17 @@
+{
+    "id": "verina",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "verina/basic_attack",
+        "resonance_skill": "verina/resonance_skill",
+        "resonance_liberation": "verina/resonance_liberation",
+        "forte_circuit": "verina/forte_circuit",
+        "intro_skill": "verina/intro_skill",
+        "outro_skill": "verina/outro_skill"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "phoebe",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "phoebe/basic_attack",
+        "resonance_skill": "phoebe/resonance_skill",
+        "resonance_liberation": "phoebe/resonance_liberation",
+        "forte_circuit": "phoebe/forte_circuit",
+        "intro_skill": "phoebe/intro_skill",
+        "outro_skill": "phoebe/outro_skill"
+    }
+}

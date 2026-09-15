@@ -1,0 +1,17 @@
+{
+    "id": "luuk_herssen",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "luuk_herssen/basic_attack",
+        "resonance_skill": "luuk_herssen/resonance_skill",
+        "resonance_liberation": "luuk_herssen/resonance_liberation",
+        "forte_circuit": "luuk_herssen/forte_circuit",
+        "intro_skill": "luuk_herssen/intro_skill",
+        "outro_skill": "luuk_herssen/outro_skill"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "jianxin",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "jianxin/basic_attack",
+        "resonance_skill": "jianxin/resonance_skill",
+        "resonance_liberation": "jianxin/resonance_liberation",
+        "forte_circuit": "jianxin/forte_circuit",
+        "intro_skill": "jianxin/intro_skill",
+        "outro_skill": "jianxin/outro_skill"
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "id": "lucilla",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "lucilla/basic_attack",
+        "resonance_skill": "lucilla/resonance_skill",
+        "resonance_liberation": "lucilla/resonance_liberation",
+        "forte_circuit": "lucilla/forte_circuit",
+        "intro_skill": "lucilla/intro_skill",
+        "outro_skill": "lucilla/outro_skill"
+    }
+}

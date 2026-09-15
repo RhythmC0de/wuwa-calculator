@@ -1,0 +1,17 @@
+{
+    "id": "jinhsi",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "jinhsi/basic_attack",
+        "resonance_skill": "jinhsi/resonance_skill",
+        "resonance_liberation": "jinhsi/resonance_liberation",
+        "forte_circuit": "jinhsi/forte_circuit",
+        "intro_skill": "jinhsi/intro_skill",
+        "outro_skill": "jinhsi/outro_skill"
+    }
+}

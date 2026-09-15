@@ -1,0 +1,17 @@
+{
+    "id": "hsin",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "hsin/basic_attack",
+        "resonance_skill": "hsin/resonance_skill",
+        "resonance_liberation": "hsin/resonance_liberation",
+        "forte_circuit": "hsin/forte_circuit",
+        "intro_skill": "hsin/intro_skill",
+        "outro_skill": "hsin/outro_skill"
+    }
+}

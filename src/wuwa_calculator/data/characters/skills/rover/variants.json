@@ -1,0 +1,81 @@
+{
+    "id": "rover",
+    "name": "Rover",
+    "rarity": 5,
+    "category": "standard",
+    "weapon_type": "sword",
+
+    "variants": {
+        "spectro": {
+            "element": "spectro",
+            "skills": {
+                "basic_attack": "rover/variants/spectro/basic_attack",
+                "resonance_skill": "rover/variants/spectro/resonance_skill",
+                "resonance_liberation": "rover/variants/spectro/resonance_liberation",
+                "forte_circuit": "rover/variants/spectro/forte_circuit",
+                "intro_skill": "rover/variants/spectro/intro_skill",
+                "outro_skill": "rover/variants/spectro/outro_skill"
+            }
+        },
+
+        "havoc": {
+            "element": "havoc",
+            "skills": {
+                "basic_attack": "rover/variants/havoc/basic_attack",
+                "resonance_skill": "rover/variants/havoc/resonance_skill",
+                "resonance_liberation": "rover/variants/havoc/resonance_liberation",
+                "forte_circuit": "rover/variants/havoc/forte_circuit",
+                "intro_skill": "rover/variants/havoc/intro_skill",
+                "outro_skill": "rover/variants/havoc/outro_skill"
+            }
+        },
+
+        "aero": {
+            "element": "aero",
+            "skills": {
+                "basic_attack": "rover/variants/aero/basic_attack",
+                "resonance_skill": "rover/variants/aero/resonance_skill",
+                "resonance_liberation": "rover/variants/aero/resonance_liberation",
+                "forte_circuit": "rover/variants/aero/forte_circuit",
+                "intro_skill": "rover/variants/aero/intro_skill",
+                "outro_skill": "rover/variants/aero/outro_skill"
+            }
+        },
+
+        "glacio": {
+            "element": "glacio",
+            "skills": {
+                "basic_attack": "rover/variants/glacio/basic_attack",
+                "resonance_skill": "rover/variants/glacio/resonance_skill",
+                "resonance_liberation": "rover/variants/glacio/resonance_liberation",
+                "forte_circuit": "rover/variants/glacio/forte_circuit",
+                "intro_skill": "rover/variants/glacio/intro_skill",
+                "outro_skill": "rover/variants/glacio/outro_skill"
+            }
+        },
+
+        "fusion": {
+            "element": "fusion",
+            "skills": {
+                "basic_attack": "rover/variants/fusion/basic_attack",
+                "resonance_skill": "rover/variants/fusion/resonance_skill",
+                "resonance_liberation": "rover/variants/fusion/resonance_liberation",
+                "forte_circuit": "rover/variants/fusion/forte_circuit",
+                "intro_skill": "rover/variants/fusion/intro_skill",
+                "outro_skill": "rover/variants/fusion/outro_skill"
+            }
+        },
+    
+        "eletro": {
+            "element": "eletro",
+            "skills": {
+                "basic_attack": "rover/variants/eletro/basic_attack",
+                "resonance_skill": "rover/variants/eletro/resonance_skill",
+                "resonance_liberation": "rover/variants/eletro/resonance_liberation",
+                "forte_circuit": "rover/variants/eletro/forte_circuit",
+                "intro_skill": "rover/variants/eletro/intro_skill",
+                "outro_skill": "rover/variants/eletro/outro_skill"
+            }
+        }
+    }
+}

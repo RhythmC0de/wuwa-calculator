@@ -1,0 +1,17 @@
+{
+    "id": "yangyang",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "yangyang/basic_attack",
+        "resonance_skill": "yangyang/resonance_skill",
+        "resonance_liberation": "yangyang/resonance_liberation",
+        "forte_circuit": "yangyang/forte_circuit",
+        "intro_skill": "yangyang/intro_skill",
+        "outro_skill": "yangyang/outro_skill"
+    }
+}

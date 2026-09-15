@@ -1,0 +1,17 @@
+{
+    "id": "youhu",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "youhu/basic_attack",
+        "resonance_skill": "youhu/resonance_skill",
+        "resonance_liberation": "youhu/resonance_liberation",
+        "forte_circuit": "youhu/forte_circuit",
+        "intro_skill": "youhu/intro_skill",
+        "outro_skill": "youhu/outro_skill"
+    }
+}

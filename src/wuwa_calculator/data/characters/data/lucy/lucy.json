@@ -1,0 +1,17 @@
+{
+    "id": "lucy",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "lucy/basic_attack",
+        "resonance_skill": "lucy/resonance_skill",
+        "resonance_liberation": "lucy/resonance_liberation",
+        "forte_circuit": "lucy/forte_circuit",
+        "intro_skill": "lucy/intro_skill",
+        "outro_skill": "lucy/outro_skill"
+    }
+}

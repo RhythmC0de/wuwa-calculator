@@ -1,0 +1,17 @@
+{
+    "id": "ciaccona",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "ciaccona/basic_attack",
+        "resonance_skill": "ciaccona/resonance_skill",
+        "resonance_liberation": "ciaccona/resonance_liberation",
+        "forte_circuit": "ciaccona/forte_circuit",
+        "intro_skill": "ciaccona/intro_skill",
+        "outro_skill": "ciaccona/outro_skill"
+    }
+}

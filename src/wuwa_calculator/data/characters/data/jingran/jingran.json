@@ -1,0 +1,17 @@
+{
+    "id": "jingran",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "jingran/basic_attack",
+        "resonance_skill": "jingran/resonance_skill",
+        "resonance_liberation": "jingran/resonance_liberation",
+        "forte_circuit": "jingran/forte_circuit",
+        "intro_skill": "jingran/intro_skill",
+        "outro_skill": "jingran/outro_skill"
+    }
+}

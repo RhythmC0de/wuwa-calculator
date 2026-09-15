@@ -1,0 +1,17 @@
+{
+    "id": "cantarella",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "cantarella/basic_attack",
+        "resonance_skill": "cantarella/resonance_skill",
+        "resonance_liberation": "cantarella/resonance_liberation",
+        "forte_circuit": "cantarella/forte_circuit",
+        "intro_skill": "cantarella/intro_skill",
+        "outro_skill": "cantarella/outro_skill"
+    }
+}

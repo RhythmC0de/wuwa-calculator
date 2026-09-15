@@ -1,0 +1,17 @@
+{
+    "id": "aalto",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "aalto/basic_attack",
+        "resonance_skill": "aalto/resonance_skill",
+        "resonance_liberation": "aalto/resonance_liberation",
+        "forte_circuit": "aalto/forte_circuit",
+        "intro_skill": "aalto/intro_skill",
+        "outro_skill": "aalto/outro_skill"
+    }
+}

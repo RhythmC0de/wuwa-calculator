@@ -1,0 +1,17 @@
+{
+    "id": "denia",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "denia/basic_attack",
+        "resonance_skill": "denia/resonance_skill",
+        "resonance_liberation": "denia/resonance_liberation",
+        "forte_circuit": "denia/forte_circuit",
+        "intro_skill": "denia/intro_skill",
+        "outro_skill": "denia/outro_skill"
+    }
+}

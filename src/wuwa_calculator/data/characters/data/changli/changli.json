@@ -1,0 +1,17 @@
+{
+    "id": "changli",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "changli/basic_attack",
+        "resonance_skill": "changli/resonance_skill",
+        "resonance_liberation": "changli/resonance_liberation",
+        "forte_circuit": "changli/forte_circuit",
+        "intro_skill": "changli/intro_skill",
+        "outro_skill": "changli/outro_skill"
+    }
+}

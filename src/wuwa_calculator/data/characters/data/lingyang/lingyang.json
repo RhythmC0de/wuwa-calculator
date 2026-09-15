@@ -1,0 +1,17 @@
+{
+    "id": "lingyang",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "lingyang/basic_attack",
+        "resonance_skill": "lingyang/resonance_skill",
+        "resonance_liberation": "lingyang/resonance_liberation",
+        "forte_circuit": "lingyang/forte_circuit",
+        "intro_skill": "lingyang/intro_skill",
+        "outro_skill": "lingyang/outro_skill"
+    }
+}

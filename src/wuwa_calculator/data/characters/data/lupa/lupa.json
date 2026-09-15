@@ -1,0 +1,17 @@
+{
+    "id": "lupa",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "lupa/basic_attack",
+        "resonance_skill": "lupa/resonance_skill",
+        "resonance_liberation": "lupa/resonance_liberation",
+        "forte_circuit": "lupa/forte_circuit",
+        "intro_skill": "lupa/intro_skill",
+        "outro_skill": "lupa/outro_skill"
+    }
+}

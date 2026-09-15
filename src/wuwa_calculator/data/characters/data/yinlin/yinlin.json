@@ -1,0 +1,17 @@
+{
+    "id": "yinlin",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "yinlin/basic_attack",
+        "resonance_skill": "yinlin/resonance_skill",
+        "resonance_liberation": "yinlin/resonance_liberation",
+        "forte_circuit": "yinlin/forte_circuit",
+        "intro_skill": "yinlin/intro_skill",
+        "outro_skill": "yinlin/outro_skill"
+    }
+}

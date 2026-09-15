@@ -1,0 +1,17 @@
+{
+    "id": "phrolova",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "phrolova/basic_attack",
+        "resonance_skill": "phrolova/resonance_skill",
+        "resonance_liberation": "phrolova/resonance_liberation",
+        "forte_circuit": "phrolova/forte_circuit",
+        "intro_skill": "phrolova/intro_skill",
+        "outro_skill": "phrolova/outro_skill"
+    }
+}

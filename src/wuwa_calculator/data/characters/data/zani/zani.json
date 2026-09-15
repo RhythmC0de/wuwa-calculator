@@ -1,0 +1,17 @@
+{
+    "id": "zani",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "zani/basic_attack",
+        "resonance_skill": "zani/resonance_skill",
+        "resonance_liberation": "zani/resonance_liberation",
+        "forte_circuit": "zani/forte_circuit",
+        "intro_skill": "zani/intro_skill",
+        "outro_skill": "zani/outro_skill"
+    }
+}

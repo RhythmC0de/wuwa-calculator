@@ -1,0 +1,17 @@
+{
+    "id": "galbrena",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "galbrena/basic_attack",
+        "resonance_skill": "galbrena/resonance_skill",
+        "resonance_liberation": "galbrena/resonance_liberation",
+        "forte_circuit": "galbrena/forte_circuit",
+        "intro_skill": "galbrena/intro_skill",
+        "outro_skill": "galbrena/outro_skill"
+    }
+}

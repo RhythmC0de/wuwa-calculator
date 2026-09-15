@@ -1,0 +1,17 @@
+{
+    "id": "xiangli_yao",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "xiangli_yao/basic_attack",
+        "resonance_skill": "xiangli_yao/resonance_skill",
+        "resonance_liberation": "xiangli_yao/resonance_liberation",
+        "forte_circuit": "xiangli_yao/forte_circuit",
+        "intro_skill": "xiangli_yao/intro_skill",
+        "outro_skill": "xiangli_yao/outro_skill"
+    }
+}

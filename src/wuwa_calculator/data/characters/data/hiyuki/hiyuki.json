@@ -1,0 +1,17 @@
+{
+    "id": "hiyuki",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "hiyuki/basic_attack",
+        "resonance_skill": "hiyuki/resonance_skill",
+        "resonance_liberation": "hiyuki/resonance_liberation",
+        "forte_circuit": "hiyuki/forte_circuit",
+        "intro_skill": "hiyuki/intro_skill",
+        "outro_skill": "hiyuki/outro_skill"
+    }
+}

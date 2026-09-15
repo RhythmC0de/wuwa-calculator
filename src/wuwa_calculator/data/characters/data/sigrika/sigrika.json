@@ -1,0 +1,17 @@
+{
+    "id": "sigrika",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "sigrika/basic_attack",
+        "resonance_skill": "sigrika/resonance_skill",
+        "resonance_liberation": "sigrika/resonance_liberation",
+        "forte_circuit": "sigrika/forte_circuit",
+        "intro_skill": "sigrika/intro_skill",
+        "outro_skill": "sigrika/outro_skill"
+    }
+}

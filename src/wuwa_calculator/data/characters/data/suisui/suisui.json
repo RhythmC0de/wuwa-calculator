@@ -1,0 +1,17 @@
+{
+    "id": "suisui",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "suisui/basic_attack",
+        "resonance_skill": "suisui/resonance_skill",
+        "resonance_liberation": "suisui/resonance_liberation",
+        "forte_circuit": "suisui/forte_circuit",
+        "intro_skill": "suisui/intro_skill",
+        "outro_skill": "suisui/outro_skill"
+    }
+}

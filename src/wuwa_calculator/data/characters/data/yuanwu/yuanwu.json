@@ -1,0 +1,17 @@
+{
+    "id": "yuanwu",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "yuanwu/basic_attack",
+        "resonance_skill": "yuanwu/resonance_skill",
+        "resonance_liberation": "yuanwu/resonance_liberation",
+        "forte_circuit": "yuanwu/forte_circuit",
+        "intro_skill": "yuanwu/intro_skill",
+        "outro_skill": "yuanwu/outro_skill"
+    }
+}

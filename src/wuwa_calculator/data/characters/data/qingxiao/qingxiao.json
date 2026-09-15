@@ -1,0 +1,17 @@
+{
+    "id": "qingxiao",
+    "name": "",
+    "rarity": null,
+    "category": null,
+    "element": null,
+    "weapon_type": null,
+    "base_stats": {},
+    "skills": {
+        "basic_attack": "qingxiao/basic_attack",
+        "resonance_skill": "qingxiao/resonance_skill",
+        "resonance_liberation": "qingxiao/resonance_liberation",
+        "forte_circuit": "qingxiao/forte_circuit",
+        "intro_skill": "qingxiao/intro_skill",
+        "outro_skill": "qingxiao/outro_skill"
+    }
+}
