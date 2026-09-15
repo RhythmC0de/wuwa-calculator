@@ -6,26 +6,36 @@ from pathlib import Path
 
 from PySide6.QtCore import QSignalBlocker, QUrl, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPixmap
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
     QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QSlider, QSplitter, QTableWidget, QVBoxLayout, QWidget,
     QStyledItemDelegate,
 )
 
-from src.app.components import Card, DataTable, MetricCard, TitleLabel
-from src.app.teams_tab import CharacterBadgeWidget
-from src.app.backend_adapter import (
+from src.wuwa_calculator.app.components import Card, DataTable, MetricCard, TitleLabel
+from src.wuwa_calculator.app.teams_tab import CharacterBadgeWidget
+from src.wuwa_calculator.app.backend_adapter import (
     ROTATION_HISTORY_FILE,
     export_history_file,
     history_records,
     import_history_file,
     save_history_record,
 )
-from src.app.styles import apply_glow
-from src.storage.team_storage import load_teams
-from src.data.images import CHARACTER_IMAGE_FALLBACKS
-from src.app.security_policy import allows_remote_content
+from src.wuwa_calculator.app.styles import apply_glow
+from src.wuwa_calculator.storage.team_storage import load_teams
+from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
+from src.wuwa_calculator.app.security_policy import allows_remote_content
+
+
+def _read_network_reply(reply: object) -> object:
+    if (
+        not getattr(reply, "isOpen", lambda: False)()
+        or getattr(reply, "error", lambda: QNetworkReply.NetworkError.UnknownNetworkError)()
+        != QNetworkReply.NetworkError.NoError
+    ):
+        return b""
+    return getattr(reply, "readAll", lambda: b"")()
 
 
 class DamageBarDelegate(QStyledItemDelegate):
@@ -481,7 +491,7 @@ class HistoryTab(QWidget):
     def _finish_team_badge(self, reply: object, badge: CharacterBadgeWidget, kind: str, url: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 if kind == "char":
                     badge.set_pixmaps(char_pixmap=pixmap)

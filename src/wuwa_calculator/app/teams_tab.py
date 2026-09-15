@@ -12,24 +12,34 @@ if __package__ in {None, ""}:
 
 from PySide6.QtCore import QSize, Qt, QRectF, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGridLayout,
     QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QLineEdit, QPushButton,
     QScrollArea, QVBoxLayout, QWidget, QFrame,
 )
 
-from src.app.components import Card, TitleLabel, apply_glow
-from src.app.security_policy import allows_remote_content
-from src.data.characters_elements import CHARACTER_ELEMENTS
-from src.data.characters_ids import KNOWN_CHARACTER_IDS
-from src.data.echoes import ECHOES_DB
-from src.data.element_images import CHARACTER_ELEMENT_IMAGE_URLS, ELEMENT_IMAGE_URLS
-from src.data.images import CHARACTER_IMAGE_FALLBACKS
-from src.data.team_saved_images import TEAM_SAVED_IMAGE_URLS
-from src.storage.team_storage import load_teams, save_teams
+from src.wuwa_calculator.app.components import Card, TitleLabel, apply_glow
+from src.wuwa_calculator.app.security_policy import allows_remote_content
+from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
+from src.wuwa_calculator.data.echoes import ECHOES_DB
+from src.wuwa_calculator.data.element_images import CHARACTER_ELEMENT_IMAGE_URLS, ELEMENT_IMAGE_URLS
+from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
+from src.wuwa_calculator.data.team_saved_images import TEAM_SAVED_IMAGE_URLS
+from src.wuwa_calculator.storage.team_storage import load_teams, save_teams
 
 SLOT_ROLES = ("Main DPS", "Suporte 1", "Suporte 2")
+
+
+def _read_network_reply(reply: object) -> object:
+    if (
+        not getattr(reply, "isOpen", lambda: False)()
+        or getattr(reply, "error", lambda: QNetworkReply.NetworkError.UnknownNetworkError)()
+        != QNetworkReply.NetworkError.NoError
+    ):
+        return b""
+    return getattr(reply, "readAll", lambda: b"")()
 
 
 def display_name(character_id: str) -> str:
@@ -144,7 +154,7 @@ class EchoPicker(QDialog):
     def _finish_echo_icon(self, reply: object, combo: QComboBox, index: int, url: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 combo.setItemIcon(index, QIcon(pixmap.scaled(QSize(32, 32), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)))
         except (AttributeError, RuntimeError, TypeError):
@@ -579,7 +589,7 @@ class TeamsTab(QWidget):
                             kind: str, source: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 if kind == "char":
                     badge.set_pixmaps(char_pixmap=pixmap)
@@ -683,7 +693,7 @@ class TeamsTab(QWidget):
     def _finish_echo_preview(self, reply: object, target: QLabel, url: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 target.setText("")
                 target.setPixmap(pixmap.scaled(target.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
@@ -722,7 +732,7 @@ class TeamsTab(QWidget):
     def _finish_element_preview(self, reply: object, target: QLabel, element: str, url: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 target.setText("")
                 target.setPixmap(pixmap.scaled(20, 20, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
@@ -733,7 +743,7 @@ class TeamsTab(QWidget):
     def _finish_slot_avatar(self, reply: object, slot: TeamSlot, url: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 slot.setIcon(QIcon(pixmap))
                 slot.setIconSize(QSize(64, 64))
@@ -753,7 +763,7 @@ class TeamsTab(QWidget):
     def _finish_avatar(self, reply: object, target: QLabel, url: str) -> None:
         try:
             pixmap = QPixmap()
-            pixmap.loadFromData(reply.readAll())
+            pixmap.loadFromData(_read_network_reply(reply))
             if not pixmap.isNull():
                 target.setPixmap(pixmap.scaled(target.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
                 target.setText("")

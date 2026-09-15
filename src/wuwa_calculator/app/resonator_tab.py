@@ -15,7 +15,7 @@ from typing import Any
 # analyzers from flagging the optional GUI dependency when it is not installed.
 from PySide6.QtCore import Qt, QUrl  # type: ignore[import-not-found]  # pylint: disable=import-error
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox,
@@ -28,16 +28,24 @@ if __package__ in {None, ""}:
 # The application supports direct execution, so local imports depend on the
 # path adjustment above.
 # pylint: disable=wrong-import-position
-from src.app.backend_adapter import calculate_character_damage
-from src.app.components import Card, TitleLabel
-from src.app.styles import apply_element_glow, apply_glow
-from src.data.characters_elements import CHARACTER_ELEMENTS
-from src.data.characters_kits import CHARACTER_KITS_DB, MANUAL_CHARACTER_KITS
-from src.data.characters_quotes import CHARACTER_QUOTES
-from src.data.characters_stats import CHARACTER_STATS_DB
-from src.data.images import CHARACTER_IMAGE_FALLBACKS
-from src.data.weapons import MANUAL_WEAPONS, _LOCAL_KIT_WEAPON_NAMES
-from src.app.security_policy import allows_local_image, allows_remote_content
+from src.wuwa_calculator.app.backend_adapter import calculate_character_damage
+from src.wuwa_calculator.app.components import Card, TitleLabel
+from src.wuwa_calculator.app.styles import apply_element_glow, apply_glow
+from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from src.wuwa_calculator.data.characters_kits import CHARACTER_KITS_DB, MANUAL_CHARACTER_KITS
+from src.wuwa_calculator.data.characters_quotes import CHARACTER_QUOTES
+from src.wuwa_calculator.data.characters_stats import CHARACTER_STATS_DB
+from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
+from src.wuwa_calculator.data.weapons import MANUAL_WEAPONS, _LOCAL_KIT_WEAPON_NAMES
+from src.wuwa_calculator.app.security_policy import allows_local_image, allows_remote_content
+
+
+def _read_network_reply(reply: object) -> bytes:
+    if not isinstance(reply, QNetworkReply):
+        return b""
+    if reply.error() != QNetworkReply.NetworkError.NoError:
+        return b""
+    return bytes(reply.readAll())
 
 
 class ResonatorTab(QWidget):
@@ -512,6 +520,33 @@ class ResonatorTab(QWidget):
         )
         return escaped
 
+    @classmethod
+    def _format_skill_description(cls, text: str) -> str:
+        """Converte descricoes longas em linhas HTML compactas e destacadas."""
+        if re.search(r"<(?:font|b|i|br)\b", text, re.IGNORECASE):
+            return text
+        paragraphs = [
+            " ".join(line.strip() for line in paragraph.splitlines())
+            for paragraph in re.split(r"\n\s*\n", text)
+            if paragraph.strip()
+        ]
+        formatted: list[str] = []
+        for paragraph in paragraphs:
+            escaped = html.escape(paragraph)
+            escaped = re.sub(
+                r"(?<!\w)(\d+(?:[.,]\d+)?%?(?:s)?)",
+                r'<font color="#eab308"><b>\1</b></font>',
+                escaped,
+            )
+            escaped = re.sub(
+                r"\b(Dano Voltaico|ATQ Pesado|ATQ Básico|Habilidade de Ressonância|Liberação de Ressonância|Ascendência|Majestade|Proeza|Coroa de Vontades)\b",
+                r'<font color="#a855f7"><b>\1</b></font>',
+                escaped,
+                flags=re.IGNORECASE,
+            )
+            formatted.append(f"• {escaped}<br>")
+        return "".join(formatted)
+
     def _render_weapon(self, manual: dict[str, Any], kit: dict[str, Any]) -> None:
         if manual:
             text = str(manual.get(self.language, manual.get("EN", "")))
@@ -543,7 +578,15 @@ class ResonatorTab(QWidget):
             text_layout = QVBoxLayout()
             title = QLabel(self._styled_text(str(skill.get("name", "Habilidade")), skill_name=True))
             title.setObjectName("skillTitle")
-            body = QLabel(self._styled_text(str(skill.get("description", "Sem descrição"))))
+            description = str(skill.get("description", "Sem descrição"))
+            description = self._format_skill_description(description)
+            body = QLabel(
+                description
+                if re.search(r"<(?:font|b|i|br)\b", description, re.IGNORECASE)
+                else self._styled_text(description)
+            )
+            if re.search(r"<(?:font|b|i|br)\b", description, re.IGNORECASE):
+                body.setTextFormat(Qt.TextFormat.RichText)
             body.setWordWrap(True)
             text_layout.addWidget(title)
             text_layout.addWidget(body)
@@ -583,7 +626,7 @@ class ResonatorTab(QWidget):
 
     def _finish_image(self, reply: object, target: QLabel, fallback: str, url: str) -> None:
         try:
-            data = reply.readAll()
+            data = _read_network_reply(reply)
             pixmap = QPixmap()
             pixmap.loadFromData(data)
             if pixmap.isNull():

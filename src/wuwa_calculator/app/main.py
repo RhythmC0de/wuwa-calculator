@@ -22,12 +22,19 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog,
     QFormLayout, QFrame, QGraphicsBlurEffect, QHBoxLayout, QFileDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QProgressBar, QPushButton, QSlider, QTabWidget, QVBoxLayout, QWidget,
+    QProgressBar, QPushButton, QSlider, QTabWidget, QToolButton, QVBoxLayout,
+    QWidget,
+    QMenu,
 )
 
-from src.app.components import Card, TitleLabel
-from src.app.resonator_tab import ResonatorTab
-from src.app.styles import application_qss, refresh_glows
+from src.wuwa_calculator.app.components import Card, TitleLabel
+from src.wuwa_calculator.app.resonator_tab import ResonatorTab
+from src.wuwa_calculator.app.styles import (
+    accent_preset,
+    application_qss,
+    refresh_glows,
+    wallpaper_palette,
+)
 
 ELEMENT_NAV_COLORS = {
     "Aero": ("#145A4A", "#72E6C0", "#E8FFF8", "#1E8068"),
@@ -37,8 +44,8 @@ ELEMENT_NAV_COLORS = {
     "Havoc": ("#642C43", "#E85D75", "#FFE8EE", "#873B58"),
     "Spectro": ("#665522", "#FFD76A", "#FFF8D6", "#87702D"),
 }
-from src.data.characters_elements import CHARACTER_ELEMENTS
-from src.data.characters_ids import KNOWN_CHARACTER_IDS
+from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
 
 # Altere para um arquivo .ico ou .png quando quiser personalizar o modal.
 TETHYS_CLOSE_ICON_PATH: str | None = None
@@ -67,6 +74,26 @@ class PlaceholderTab(QWidget):
         card_layout.addWidget(text)
         card_layout.addStretch(1)
         layout.addWidget(card)
+
+
+class CharacterSidebarButton(QPushButton):
+    close_requested = Signal()
+
+    def __init__(self, label: str, parent: QWidget | None = None) -> None:
+        super().__init__(label, parent)
+        self.close_button = QToolButton(self)
+        self.close_button.setObjectName("tabClose")
+        self.close_button.setText("×")
+        self.close_button.setToolTip("Fechar aba")
+        self.close_button.setFixedSize(22, 22)
+        self.close_button.clicked.connect(self.close_requested)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.close_button.move(
+            self.width() - self.close_button.width() - 5,
+            (self.height() - self.close_button.height()) // 2,
+        )
 
 
 class SettingsTab(QWidget):
@@ -559,7 +586,7 @@ class ImageImportWorker(QObject):
                 "Baixando componentes para identificar atributos..."
             )
             self.progress.emit(15)
-            from src.utils.ocr import (  # pylint: disable=import-outside-toplevel
+            from src.wuwa_calculator.utils.ocr import (  # pylint: disable=import-outside-toplevel
                 extract_image_data,
             )
 
@@ -569,9 +596,9 @@ class ImageImportWorker(QObject):
             self.status.emit("Aplicando leitura de kits e habilidades...")
             self.progress.emit(70)
             stats, detected_id = extract_image_data(self.path)
-            if detected_id != self.target_id:
+            if detected_id is not None and detected_id != self.target_id:
                 raise ImageCharacterMismatchError(
-                    detected_id or "desconhecido", self.target_id
+                    detected_id, self.target_id
                 )
             self.status.emit("Finalizando atributos, bônus e status...")
             self.progress.emit(100)
@@ -640,19 +667,19 @@ class WuwaQtWindow(QMainWindow):
         tabs.tabBar().hide()
         
         def build_home() -> QWidget:
-            from src.app.home_tab import HomeTab
+            from src.wuwa_calculator.app.home_tab import HomeTab
             return HomeTab()
 
         def build_teams() -> QWidget:
-            from src.app.teams_tab import TeamsTab
+            from src.wuwa_calculator.app.teams_tab import TeamsTab
             return TeamsTab()
 
         def build_history() -> QWidget:
-            from src.app.history_tab import HistoryTab
+            from src.wuwa_calculator.app.history_tab import HistoryTab
             return HistoryTab()
 
         def build_multimedia() -> QWidget:
-            from src.app.multimedia_tab import MultimediaTab
+            from src.wuwa_calculator.app.multimedia_tab import MultimediaTab
             return MultimediaTab()
 
         self._tab_factories = (
@@ -679,7 +706,9 @@ class WuwaQtWindow(QMainWindow):
         self._handle_main_tab_changed(0)
 
         self.character_tabs: dict[str, ResonatorTab] = {}
+        self.character_open_order: list[str] = []
         self.sidebar_buttons: dict[str, QPushButton] = {}
+        self.character_sidebar_rows: dict[str, QWidget] = {}
 
         workspace = QHBoxLayout()
         workspace.setContentsMargins(0, 0, 0, 0)
@@ -725,6 +754,7 @@ class WuwaQtWindow(QMainWindow):
         self.character_id_entry.returnPressed.connect(
             self.open_character_tab)
         self.import_button.clicked.connect(self.open_import_dialog)
+        self.apply_preferences()
 
     def apply_preferences(self) -> None:
         self.preferences.sync()
@@ -741,6 +771,13 @@ class WuwaQtWindow(QMainWindow):
                 interface_opacity=interface_opacity,
                 accent_theme=accent_theme,
             ))
+        for widget in self.findChildren(QWidget):
+            apply_palette = getattr(widget, "apply_wallpaper_palette", None)
+            if callable(apply_palette):
+                apply_palette(
+                    *wallpaper_palette(wallpaper if background else ""),
+                    accent_preset(accent_theme),
+                )
         refresh_glows(self)
         self._update_background(background, wallpaper)
 
@@ -902,6 +939,99 @@ class WuwaQtWindow(QMainWindow):
             button.style().polish(button)
             button.update()
 
+    def _add_character_sidebar_button(
+        self,
+        character_id: str,
+        label: str,
+        element: str | None,
+    ) -> None:
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(4)
+        button = CharacterSidebarButton(label)
+        button.setObjectName("nav")
+        if element:
+            button.setProperty("element", element)
+            background, border, text, hover = ELEMENT_NAV_COLORS.get(
+                element, ELEMENT_NAV_COLORS["Spectro"]
+            )
+            button.setStyleSheet(
+                f"QPushButton {{ background: {background}; color: {text}; "
+                f"border: 1px solid {border}; border-radius: 7px; padding: 10px; "
+                f"padding-right: 32px; }}"
+                f"QPushButton:hover {{ background: {hover}; border: 1px solid {border}; }}"
+            )
+        row_layout.addWidget(button)
+        self.sidebar_buttons[label] = button
+        button.clicked.connect(
+            lambda: self._select_character_tab(character_id, label))
+        button.close_requested.connect(
+            lambda: self._close_character_tab(character_id))
+        self.character_sidebar_rows[character_id] = row
+        self.character_sidebar_layout.addWidget(row)
+
+    def _select_character_tab(self, character_id: str, label: str) -> None:
+        character_tab = self.character_tabs.get(character_id)
+        if character_tab is None:
+            return
+        self.tabs.setCurrentWidget(character_tab)
+        self._set_sidebar_active(label)
+
+    def _close_character_tab(self, character_id: str) -> None:
+        character_tab = self.character_tabs.pop(character_id, None)
+        row = self.character_sidebar_rows.pop(character_id, None)
+        if character_tab is None:
+            return
+
+        label = (
+            f"{self._element_icon(CHARACTER_ELEMENTS.get(character_id))}   "
+            f"{character_id.title()}"
+        )
+        self.sidebar_buttons.pop(label, None)
+        was_current = self.tabs.currentWidget() is character_tab
+        history_index = self.character_open_order.index(character_id)
+        if history_index == 0:
+            previous_character_id = (
+                self.character_open_order[1]
+                if len(self.character_open_order) > 1 else None
+            )
+        else:
+            previous_character_id = self.character_open_order[history_index - 1]
+        self.character_open_order.remove(character_id)
+        tab_index = self.tabs.indexOf(character_tab)
+        if tab_index >= 0:
+            self.tabs.removeTab(tab_index)
+        character_tab.deleteLater()
+        if row is not None:
+            row.deleteLater()
+
+        if was_current:
+            previous_tab = self.character_tabs.get(previous_character_id)
+            if previous_tab is not None:
+                self.tabs.setCurrentWidget(previous_tab)
+                previous_label = (
+                    f"{self._element_icon(CHARACTER_ELEMENTS.get(previous_character_id))}   "
+                    f"{previous_character_id.title()}"
+                )
+                self._set_sidebar_active(previous_label)
+            else:
+                self.tabs.setCurrentIndex(0)
+                self._set_sidebar_active("Home")
+            return
+
+        current_widget = self.tabs.currentWidget()
+        if isinstance(current_widget, ResonatorTab):
+            current_id = current_widget.current_id
+            self._set_sidebar_active(
+                f"{self._element_icon(CHARACTER_ELEMENTS.get(current_id))}   "
+                f"{current_id.title()}"
+            )
+        else:
+            current_index = self.tabs.currentIndex()
+            if 0 <= current_index < len(self._tab_titles):
+                self._set_sidebar_active(self._tab_titles[current_index])
+
     @staticmethod
     def _normalize_character_id(value: str) -> str:
         folded = "".join(
@@ -933,6 +1063,7 @@ class WuwaQtWindow(QMainWindow):
         if character_tab is None:
             character_tab = ResonatorTab(initial_id=character_id)
             self.character_tabs[character_id] = character_tab
+            self.character_open_order.append(character_id)
             sources_index = self.tabs.count() - 1
             self.tabs.insertTab(sources_index,
                                 character_tab,
@@ -943,10 +1074,9 @@ class WuwaQtWindow(QMainWindow):
                 sources_index,
                 f"{self._element_icon(element)} {label}",
             )
-            self._add_sidebar_button(
-                self.character_sidebar_layout,
+            self._add_character_sidebar_button(
+                character_id,
                 f"{self._element_icon(element)}   {label}",
-                self.tabs.indexOf(character_tab),
                 element,
             )
 

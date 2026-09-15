@@ -97,13 +97,152 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "markers": [("Marcador", 0.0)],
     },
     "augusta": {
-        "kit_name": "Augusta",
-        "skills": [
-            {"name": "Ataque Básico", "description": "Descrição detalhada do ataque básico."},
-            {"name": "Habilidade de Ressonância", "description": "Descrição da habilidade de ressonância."},
-            {"name": "Circuito Forte", "description": "Descrição do circuito forte."},
-            {"name": "Liberação de Ressonância", "description": "Descrição da liberação de ressonância."},
-        ],
+    "kit_name": "Augusta",
+    "skills": [
+        {
+            "name": "Ataque Básico - Caminho da Caçadora",
+            "description": (
+                "• Combo Básico: Até 4 golpes consecutivos de Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+                "• ATQ Pesado (Choque de Aço): Consome <font color='#eab308'><b>Vigor</b></font> para Dano <font color='#a855f7'><b>Voltaico</b></font>. "
+                "Pressione ATQ Básico para emendar no 2º estágio.<br>"
+                "• ATQ Aéreo & Esquiva: Consome <font color='#eab308'><b>Vigor</b></font> para Ataque em Mergulho. "
+                "Contra-Ataque pós-esquiva causa Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+                "• <font color='#a855f7'><b>Proeza Cheia (100pt)</b></font>: Converte o Pesado em <font color='#6feaff'><b>Trovão Rugidor: Recuo</b></font>, "
+                "encadeando em <font color='#6feaff'><b>Corte Giratório</b></font> (ATQ) ou <font color='#6feaff'><b>Uppercut</b></font> (Pulo).<br>"
+                "• Modificador de Estado: Com Proeza/Ascendência cheia, altera os Contra-Ataques de Esquiva."
+            )
+        },
+        {
+            "name": "Habilidade de Ressonância: Lâmina da Guerreira",
+            "description": """Augusta salta e golpeia o chão com seu espadão, causando Dano Voltaico.
+
+    Contra-ATQ Evasivo: Luz Solar Eterna - Golpe
+
+    Quando Ascendência está cheia, após uma Esquiva no chão, pressionar Habilidade de Ressonância realiza Contra-ATQ Evasivo: Luz Solar Eterna - Golpe, causando Dano Voltaico, considerado como Dano de Habilidade de Ressonância. Após uma Esquiva Aérea, pressionar ATQ Básico ou Habilidade de Ressonância realiza este mesmo ataque.
+
+    Durante a ação, pressionar ATQ Básico ou Habilidade de Ressonância realiza Habilidade de Ressonância: Luz Solar Imortal - Salto.
+
+    Se a Habilidade de Ressonância: Luz Solar Imortal - Salto for interrompida, ela pode ser realizada novamente após um certo período."""
+        },
+        {
+            "name": "Circuito Forte - Invoca-me pelo Sol",
+            "description": """Habilidade de Ressonância: Luz Solar Imortal - Golpe
+
+    Quando Ascendência está cheia, Habilidade de Ressonância: Lâmina do Guerreiro é substituída por Habilidade de Ressonância: Luz Solar Imortal - Golpe, causando Dano Voltaico.
+
+    Durante a ação, pressionar ATQ Básico ou Habilidade de Ressonância realiza Habilidade de Ressonância: Luz Solar Imortal - Salto.
+
+    Se a Habilidade de Ressonância: Luz Solar Imortal - Golpe for interrompida, ela pode ser realizada novamente logo.
+
+    Se a Habilidade de Ressonância: Luz Solar Imortal - Salto for interrompida, ela pode ser realizada novamente após um certo período.
+
+    Pode ser realizada no ar.
+
+    Habilidade de Ressonância: Luz Solar Imortal - Salto
+
+    Causa Dano Voltaico.
+
+    Durante a ação, pressionar ATQ Básico ou Habilidade de Ressonância realiza Habilidade de Ressonância: Luz Solar Imortal - Mergulho.
+
+    Se a Habilidade de Ressonância: Luz Solar Imortal - Salto for interrompida, ela pode ser realizada novamente logo.
+
+    Se a Habilidade de Ressonância: Luz Solar Imortal - Mergulho for interrompida, ela pode ser realizada novamente após um certo período.
+
+    Só pode ser realizada no ar.
+
+    Habilidade de Ressonância: Luz Solar Imortal - Mergulho
+
+    Consome toda Ascendência para lançar esta habilidade, causando Dano Voltaico, considerado como Dano de ATQ Pesado.
+
+    Realizar esta habilidade ganha 1 acúmulo de Majestade.
+
+    Só pode ser realizada no ar.
+
+    Ascendência
+
+    Augusta pode acumular até 100 pontos de Ascendência.
+
+    Ganha Ascendência ao causar dano com ATQ Normal.
+
+    Ganha 20% de Ascendência ao realizar Habilidade Intro: Passo da Chama Dourada.
+
+    Ganha e restaura 10% de Ascendência ao realizar Habilidade de Ressonância: Lâmina do Guerreiro.
+
+    Ganha 40% de Ascendência ao realizar Liberação de Ressonância: Espada do Juramento Eterno."""
+        },
+        {
+            "name": "Liberação de Ressonância - Conquista em Direção ao Sol",
+            "description": """Liberação de Ressonância: Espada do Juramento Eterno
+
+    Pressionar e soltar Liberação de Ressonância realiza esta habilidade. Augusta varre seu Espadão para frente, causando Dano Voltaico, considerado como Dano de ATQ Pesado.
+
+    Liberação de Ressonância: Sublime é o Sol
+
+    Quando Majestade alcança 2 acúmulos, segurar Liberação de Ressonância realiza Liberação de Ressonância: Sublime é o Sol. Realizar Liberação de Ressonância: Sublime é o Sol não consome Energia de Ressonância, mas 2 acúmulos de Majestade.
+
+    Ao realizar Liberação de Ressonância: Sublime é o Sol, Augusta gera o Reino do Governante e entra no estado Juramento de Lealdade por 7s. Durante esse período, o tempo é temporariamente parado e a troca de Ressonante é bloqueada. Apenas Sublime é o Sol: Solisnato, Sublime é o Sol: Protetor Semprebrilho e Esquiva podem ser executados no estado Lealdade Jurada. O ATQ Aéreo pode ser realizado no ar.
+
+    No estado Lealdade Jurada, pressionar ou segurar ATQ Básico realiza Sublime é o Sol: Solisnato. Augusta pode caminhar sobre a água sem consumir VIG neste estado.
+
+    Realizar qualquer interação não relacionada ao combate termina Lealdade Jurada sem ativar Sublime é o Sol: Protetor Semprebrilho.
+
+    Sublime é o Sol: Solisnato
+
+    Causa Dano Voltaico, considerado como Dano de ATQ Pesado. Após realizar 9 vezes de Sublime é o Sol: Solisnato, pressionar ATQ Básico ou Liberação de Ressonância executa Sublime é o Sol: Protetor Semprebrilho.
+
+    Sublime é o Sol: Protetor Semprebrilho
+
+    Causa Dano Voltaico, considerado como Dano de ATQ Pesado. Realizar Sublime é o Sol: Protetor Semprebrilho termina o estado Juramento de Lealdade e consome todos os acúmulos de Coroa de Vontades posteriormente. Todos os outros Ressonantes da equipe serão forçados a sair de campo.
+
+    Quando Lealdade Jurada termina, Sublime é o Sol: Protetor Semprebrilho é automaticamente realizado.
+
+    Durante Lealdade Jurada, segurar Liberação de Ressonância pode realizar Sublime é o Sol: Protetor Semprebrilho antecipadamente.
+
+    Reino da Governante
+
+    Reino da Governante dura 30s.
+
+    Quando Ressonantes da equipe realizam Habilidade Intro dentro do Reino da Governante, eles ganham um escudo igual a 650 + 5% do HP Máx. de Augusta por 10s. Este efeito não é acumulável. Este escudo não é transferido ao trocar de Ressonante.
+
+    Majestade
+
+    Augusta pode manter até 2 acúmulos de Majestade.
+
+    Ganha 1 acúmulo de Majestade ao realizar Habilidade de Ressonância: Luz Solar Imortal - Mergulho.
+
+    Ganha 1 acúmulo de Majestade quando outros Ressonantes da equipe realizam Habilidade Outro sob o efeito da Habilidade Outro: Canto de Batalha dos Inflexíveis de Augusta.
+
+    """
+        },
+        {
+            "name": "Habilidade Intro - Passo da Chama Dourada",
+            "description": """Causa Dano Voltaico."""
+        },
+        {
+            "name": "Habilidade Outro - Canção de Batalha dos Inflexíveis",
+            "description": """O próximo Ressonante a entrar em campo ganha os seguintes efeitos por 14s. Os efeitos terminam imediatamente se ele for substituído.
+
+Amplifica todo o Dano em 15%.
+
+Ao realizar Habilidade Outro, Augusta ganha 1 acúmulo de Majestade e 1 acúmulo de Coroa de Vontades.
+
+Coroa de Vontades
+
+Cada acúmulo aumenta 15% de Dano Voltaico, até 1 acúmulo. Quando a Liberação de Ressonância: Sublime é o Sol: Guardião da Luz Perpétua termina, todos os acúmulos de Coroa de Vontades são removidos."""
+        },
+        {
+            "name": "Habilidade Inata 1 - Favor da Glória",
+            "description": """Quando Augusta causa dano, ela ganha um escudo igual a 350 + 2.5% de seu HP Máx. por 5s, ativado uma vez a cada 0.5s. Este efeito não é acumulável. Este escudo não é transferido ao trocar de Ressonante."""
+        },
+        {
+            "name": "Habilidade Inata 2 - Bravura Calcinante",
+            "description": """Quando Augusta está fora de combate por mais de 4s, ela ganha os seguintes efeitos, que podem ser ativados uma vez a cada 4s.
+
+Se Majestade for menor que 1 acúmulo, restaura 1 acúmulo.
+
+Restaura completamente Coroa de Vontades."""
+        }
+    ],
         "team_buffs": [("Bônus de Equipe", 0.0)],
         "personal_buffs": [("Bônus Pessoal", 0.0)],
         "markers": [("Marcador", 0.0)],
@@ -793,3 +932,71 @@ MANUAL_CHARACTER_KITS: dict[str, dict[str, object]] = {
         "markers": [("Marcador", 0.0)],
     },
 }
+
+MANUAL_CHARACTER_KITS["augusta"]["skills"] = [
+    {
+        "name": "Ataque Básico - Caminho da Caçadora",
+        "description": (
+            "• Combo Básico: Até 4 golpes consecutivos de Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+            "• ATQ Pesado - Choque de Aço: Consome <font color='#eab308'><b>Vigor</b></font> e causa Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+            "• ATQ Aéreo e Contra-ataque de Esquiva: Ataques de mergulho e Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+            "• <font color='#a855f7'><b>Proeza Cheia</b></font>: Desbloqueia Trovão Rugidor: Recuo, Corte Giratório e Uppercut."
+        ),
+    },
+    {
+        "name": "Habilidade de Ressonância: Lâmina da Guerreira",
+        "description": (
+            "• Lâmina da Guerreira: Augusta salta e golpeia o chão, causando Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+            "• Contra-ATQ Evasivo: Luz Solar Eterna - Golpe causa Dano de Habilidade de Ressonância.<br>"
+            "• Com Ascendência cheia, ataques no chão e no ar podem encadear no Luz Solar Imortal - Salto."
+        ),
+    },
+    {
+        "name": "Circuito Forte - Invoca-me pelo Sol",
+        "description": (
+            "• Luz Solar Imortal - Golpe substitui a Lâmina da Guerreira com Ascendência cheia.<br>"
+            "• Luz Solar Imortal - Salto causa Dano <font color='#a855f7'><b>Voltaico</b></font> e pode ser realizada no ar.<br>"
+            "• Luz Solar Imortal - Mergulho consome Ascendência e causa Dano de ATQ Pesado.<br>"
+            "• Cada Mergulho concede 1 acúmulo de <font color='#a855f7'><b>Majestade</b></font>.<br>"
+            "• <font color='#a855f7'><b>Ascendência</b></font>: acumula até 100 pontos com ataques e habilidades."
+        ),
+    },
+    {
+        "name": "Liberação de Ressonância - Conquista em Direção ao Sol",
+        "description": (
+            "• Espada do Juramento Eterno: Varre o Espadão e causa Dano <font color='#a855f7'><b>Voltaico</b></font> de ATQ Pesado.<br>"
+            "• Sublime é o Sol: Com 2 acúmulos de Majestade, entra em Lealdade Jurada por 7s.<br>"
+            "• Solisnato e Protetor Semprebrilho causam Dano de ATQ Pesado e encerram o estado.<br>"
+            "• Reino da Governante: Dura 30s e concede escudo aos Ressonantes da equipe."
+        ),
+    },
+    {
+        "name": "Habilidade Intro - Passo da Chama Dourada",
+        "description": (
+            "• Passo da Chama Dourada causa Dano <font color='#a855f7'><b>Voltaico</b></font>.<br>"
+            "• Concede 20% de <font color='#a855f7'><b>Ascendência</b></font>."
+        ),
+    },
+    {
+        "name": "Habilidade Outro - Canção de Batalha dos Inflexíveis",
+        "description": (
+            "• O próximo Ressonante recebe 15% de amplificação de Dano por 14s.<br>"
+            "• Augusta ganha 1 acúmulo de <font color='#a855f7'><b>Majestade</b></font> e 1 de Coroa de Vontades.<br>"
+            "• Coroa de Vontades aumenta o Dano <font color='#a855f7'><b>Voltaico</b></font>."
+        ),
+    },
+    {
+        "name": "Habilidade Inata 1 - Favor da Glória",
+        "description": (
+            "• Ao causar dano, Augusta ganha um escudo por 5s.<br>"
+            "• O efeito pode ser ativado uma vez a cada 0.5s e não é acumulável."
+        ),
+    },
+    {
+        "name": "Habilidade Inata 2 - Bravura Calcinante",
+        "description": (
+            "• Após 4s fora de combate, restaura <font color='#a855f7'><b>Majestade</b></font> se estiver abaixo de 1 acúmulo.<br>"
+            "• Restaura completamente a Coroa de Vontades."
+        ),
+    },
+]

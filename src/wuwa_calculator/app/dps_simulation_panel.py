@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QTimeEdit, QVBoxLayout, QWidget,
 )
 
-from src.app.components import Card
+from src.wuwa_calculator.app.components import Card
 
 
 ANALYSIS_BUCKET_SECONDS = 5.0

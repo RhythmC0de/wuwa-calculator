@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -12,7 +13,10 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PySide6.QtCore import QByteArray, QObject, QEvent, QThread, QTimer, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import (
+    QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
+    QRadialGradient,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -24,10 +28,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.app.components import Card, TitleLabel, WuWaKuroBannerCard
-from src.app.banner_service import fetch_current_banner
-from src.app.styles import apply_glow
-from src.storage.banner_cache import load_cached_banner, save_cached_banner
+from src.wuwa_calculator.app.components import Card, TitleLabel, WuWaKuroBannerCard
+from src.wuwa_calculator.app.banner_service import fetch_current_banner
+from src.wuwa_calculator.app.pity_tracker import PityTrackerWidget
+from src.wuwa_calculator.app.styles import apply_glow
+from src.wuwa_calculator.storage.banner_cache import load_cached_banner, save_cached_banner
 
 
 _print = builtins.print
@@ -126,7 +131,7 @@ class CatalogWorker(QObject):
     finished = Signal(object)
 
     def run(self) -> None:
-        from src.app.wuwa_tracker_adapter import fetch_banner_catalog
+        from src.wuwa_calculator.app.wuwa_tracker_adapter import fetch_banner_catalog
         self.finished.emit(fetch_banner_catalog())
 
 
@@ -193,6 +198,17 @@ class UpcomingBannerCard(QFrame):
         overlay_layout.addWidget(details)
         image.lower()
         overlay.raise_()
+        self.hologram_overlay = QLabel(self)
+        self.hologram_overlay.setFixedSize(self.size())
+        self.hologram_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hologram_overlay.setStyleSheet("background: transparent;")
+        self.hologram_phase = 0.0
+        self._apply_hologram_mask()
+        self._update_hologram()
+        self.hologram_timer = QTimer(self)
+        self.hologram_timer.timeout.connect(self._update_hologram)
+        self.hologram_timer.start(50)
+        self.hologram_overlay.raise_()
 
         self.hover_frame = QFrame(self)
         self.hover_frame.setGeometry(0, 0, self.width(), self.height())
@@ -205,6 +221,76 @@ class UpcomingBannerCard(QFrame):
         self.hover_frame.raise_()
         image.installEventFilter(self)
         overlay.installEventFilter(self)
+
+    def _apply_hologram_mask(self) -> None:
+        mask = QPixmap(self.size())
+        mask.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(mask)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 16, 16)
+        painter.fillPath(path, Qt.GlobalColor.white)
+        painter.end()
+        self.hologram_overlay.setMask(
+            mask.createMaskFromColor(
+                QColor(Qt.GlobalColor.transparent),
+                Qt.MaskMode.MaskInColor,
+            )
+        )
+
+    def _update_hologram(self) -> None:
+        width, height = self.width(), self.height()
+        overlay = QPixmap(width, height)
+        overlay.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(overlay)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, width, height), 16, 16)
+        painter.setClipPath(path)
+
+        shift = -320.0 + (720.0 * self.hologram_phase)
+        prism = QLinearGradient(-80 + shift, 0, 90 + shift, height)
+        prism.setColorAt(0.18, QColor(255, 70, 120, 0))
+        prism.setColorAt(0.36, QColor(255, 70, 120, 38))
+        prism.setColorAt(0.46, QColor(255, 220, 80, 42))
+        prism.setColorAt(0.54, QColor(75, 240, 210, 38))
+        prism.setColorAt(0.63, QColor(90, 150, 255, 45))
+        prism.setColorAt(0.73, QColor(210, 95, 255, 38))
+        prism.setColorAt(0.84, QColor(255, 70, 180, 0))
+        painter.fillRect(0, 0, width, height, prism)
+
+        highlight = QLinearGradient(-35 + shift, 0, 45 + shift, height)
+        highlight.setColorAt(0.40, QColor(255, 255, 255, 0))
+        highlight.setColorAt(0.50, QColor(255, 255, 255, 55))
+        highlight.setColorAt(0.60, QColor(255, 255, 255, 0))
+        painter.fillRect(0, 0, width, height, highlight)
+
+        border = QLinearGradient(0, 0, width, height)
+        border.setColorAt(0.00, QColor(70, 235, 255, 190))
+        border.setColorAt(0.35, QColor(190, 110, 255, 150))
+        border.setColorAt(0.60, QColor(255, 220, 100, 180))
+        border.setColorAt(1.00, QColor(255, 70, 180, 170))
+        painter.setPen(QPen(QBrush(border), 2.0))
+        painter.drawPath(path)
+
+        for index, (x_ratio, y_ratio) in enumerate(
+            ((0.10, 0.16), (0.30, 0.88), (0.52, 0.12), (0.73, 0.84), (0.91, 0.28))
+        ):
+            x = x_ratio * width + math.sin(
+                self.hologram_phase * 6.283 + index) * 2
+            y = y_ratio * height + math.cos(
+                self.hologram_phase * 6.283 + index) * 2
+            glow = QRadialGradient(x, y, 10)
+            glow.setColorAt(0.0, QColor(255, 255, 255, 180))
+            glow.setColorAt(0.35, QColor(100, 220, 255, 80))
+            glow.setColorAt(1.0, QColor(0, 0, 0, 0))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(glow))
+            painter.drawEllipse(QRectF(x - 10, y - 10, 20, 20))
+
+        painter.end()
+        self.hologram_overlay.setPixmap(overlay)
+        self.hologram_phase = (self.hologram_phase + 0.012) % 1.0
 
     def _set_hovered(self, hovered: bool) -> None:
         self.hover_frame.setVisible(hovered)
@@ -258,28 +344,39 @@ class UpcomingBannersSection(QFrame):
         body = QHBoxLayout()
         body.setContentsMargins(0, 4, 0, 0)
         body.setSpacing(20)
-        self.past_layout = QVBoxLayout()
-        self.past_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        body.addLayout(self.past_layout, 0)
-        future_layout = QVBoxLayout()
-        future_title = QLabel("PRÓXIMOS BANNERS CONFIRMADOS")
-        future_title.setObjectName("bannerTimelineSection")
-        future_layout.addWidget(future_title)
-        self.future_message = QLabel("Sem próximos banners confirmados.")
-        self.future_message.setObjectName("bannerTimelineEmpty")
-        future_layout.addWidget(self.future_message, 1, Qt.AlignmentFlag.AlignCenter)
-        body.addLayout(future_layout, 1)
+        self.past_layout = QHBoxLayout()
+        self.past_layout.setSpacing(10)
+        body.addLayout(self.past_layout, 1)
+        self.current_layout = QHBoxLayout()
+        self.current_layout.setSpacing(10)
+        body.addLayout(self.current_layout, 1)
+        self.future_layout = QHBoxLayout()
+        self.future_layout.setSpacing(10)
+        body.addLayout(self.future_layout, 1)
         root.addLayout(body, 1)
         self.set_cards([], loading=True)
 
     def set_cards(self, records: list[dict[str, object]], loading: bool = False) -> None:
-        while self.past_layout.count():
-            item = self.past_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-        past = next((item for item in records if item.get("kind") == "past"), None)
-        if past is not None:
-            self.past_layout.addWidget(UpcomingBannerCard(past, "PASSADO", compact=True))
+        for layout in (self.past_layout, self.current_layout, self.future_layout):
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget() is not None:
+                    item.widget().deleteLater()
+
+        columns = (
+            (self.past_layout, "past", "BANNER PASSADO"),
+            (self.current_layout, "current", "BANNER ATUAL"),
+            (self.future_layout, "future", "PRÓXIMOS CONFIRMADOS"),
+        )
+        for layout, kind, title in columns:
+            record = next((item for item in records if item.get("kind") == kind), None)
+            if record is not None:
+                layout.addWidget(UpcomingBannerCard(record, title, compact=True))
+            else:
+                placeholder = QLabel(title + "\nSem dados importados.")
+                placeholder.setObjectName("bannerTimelineEmpty")
+                placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                layout.addWidget(placeholder)
 
 
 class HomeTab(QWidget):
@@ -307,6 +404,13 @@ class HomeTab(QWidget):
         self.catalog_worker: CatalogWorker | None = None
         self.banner_card: WuWaKuroBannerCard | None = None
         
+        hero_row = QHBoxLayout()
+        hero_row.setContentsMargins(0, 0, 0, 0)
+        hero_row.setSpacing(12)
+        banner_column = QWidget()
+        banner_column_layout = QVBoxLayout(banner_column)
+        banner_column_layout.setContentsMargins(0, 0, 0, 0)
+
         # Container temporário para o banner enquanto carrega
         self.banner_placeholder = QFrame()
         self.banner_placeholder.setFixedWidth(960)
@@ -317,7 +421,18 @@ class HomeTab(QWidget):
         placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         placeholder_label.setObjectName("muted")
         placeholder_layout.addWidget(placeholder_label)
-        self.banner_container = root
+        self.banner_container = banner_column_layout
+        hero_row.addWidget(banner_column, 1)
+        active_name = str(initial_banner.get("name", "qingxiao")) if initial_banner else "qingxiao"
+        self.pity_tracker = PityTrackerWidget(
+            active_character=active_name,
+            banner_images={
+                "resonator": initial_banner.get("image_bytes", b"")
+                if initial_banner else b""
+            },
+        )
+        hero_row.addWidget(self.pity_tracker, 0, Qt.AlignmentFlag.AlignTop)
+        root.addLayout(hero_row)
         
         # Se já tem banner pré-carregado, mostra imediatamente
         if initial_banner:
@@ -326,7 +441,7 @@ class HomeTab(QWidget):
             QTimer.singleShot(0, self._start_banner_refresh)
         else:
             # Caso contrário, mostra placeholder e carrega em background
-            root.addWidget(self.banner_placeholder)
+            self.banner_container.addWidget(self.banner_placeholder)
             QTimer.singleShot(0, self._start_banner_refresh)
 
         self.timeline_panel = UpcomingBannersSection()

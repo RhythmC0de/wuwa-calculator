@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.app.styles import CARD, apply_element_glow, apply_glow
-from src.data.characters_elements import CHARACTER_ELEMENTS
+from src.wuwa_calculator.app.styles import CARD, apply_element_glow, apply_glow
+from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
 
 
 _print = builtins.print

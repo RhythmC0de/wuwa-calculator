@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.app.components import Card, TitleLabel
+from src.wuwa_calculator.app.components import Card, TitleLabel
 
 
 class ClickableSeekSlider(QSlider):

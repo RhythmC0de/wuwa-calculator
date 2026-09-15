@@ -118,6 +118,11 @@ def _wallpaper_palette(wallpaper: str) -> tuple[str, str, str, str, str]:
     return surface.name(), panel.name(), border.name(), accent.name(), muted.name()
 
 
+def wallpaper_palette(wallpaper: str = "") -> tuple[str, str, str, str, str]:
+    """Return the colors derived from the active wallpaper."""
+    return _wallpaper_palette(wallpaper)
+
+
 def _accent_preset(name: str) -> str:
     return {
         "Ciano Tethys": "#6FEAFF",
@@ -125,6 +130,11 @@ def _accent_preset(name: str) -> str:
         "Roxo Nécro": "#B78CFF",
         "Vermelho Alerta": "#FF6B6B",
     }.get(name, "#6FEAFF")
+
+
+def accent_preset(name: str) -> str:
+    """Return the configured interface accent color."""
+    return _accent_preset(name)
 
 
 def application_qss(

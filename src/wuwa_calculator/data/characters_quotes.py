@@ -8,7 +8,7 @@ from pathlib import Path
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.data.characters_ids import KNOWN_CHARACTER_IDS
+from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
 
 # Unknown characters stay blank until a quote is added for their approved ID.
 CHARACTER_QUOTES: dict[str, tuple[str, ...]] = {

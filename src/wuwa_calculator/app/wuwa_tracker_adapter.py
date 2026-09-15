@@ -103,7 +103,7 @@ def _try_gist() -> dict[str, Any] | None:
     """Tenta Gist - fallback confiável com URL de imagem pronta."""
     try:
         print(f"  [Gist] Requisitando banner_service...")
-        from src.app.banner_service import fetch_current_banner
+        from src.wuwa_calculator.app.banner_service import fetch_current_banner
         banner = fetch_current_banner()
         if banner:
             banner["source"] = "gist"

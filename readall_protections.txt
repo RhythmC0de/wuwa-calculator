@@ -1,0 +1,186 @@
+REGISTRO UNICO DE ALTERACOES - TETHYS
+
+A partir de agora, os trechos de codigo e registros de alteracoes solicitados
+serao consolidados neste arquivo TXT unico.
+
+Observacao: este TXT serve como registro de codigo. Alteracoes que precisem
+ser executadas pelo aplicativo ainda precisam ser aplicadas nos arquivos .py.
+
+==================================================
+ALTERACOES RECENTES CONSOLIDADAS
+==================================================
+
+1. Interface acrilica
+- app/main.py: slider Opacidade da interface mantido.
+- app/main.py: QGraphicsBlurEffect aplicado ao wallpaper.
+- app/styles.py: alpha dos paineis controlado pelo slider.
+
+2. Equipes salvas e Echoes
+- app/components.py: timer deslocado para a esquerda com margem 12.
+- app/teams_tab.py: imagens de personagens e armas com encaixe proporcional.
+- app/teams_tab.py: EchoPreviewIcon criado com mascara circular e clipping.
+- app/teams_tab.py: indicador vazio desenhado geometricamente centralizado.
+
+3. Aba Frequencias
+- app/history_video_player.py: toolbar unica com controles e seekbar.
+- app/history_video_player.py: HUD LIVE ANALYZER // 60 FPS.
+- app/multimedia_tab.py: timeline categorizada e informacoes em grid.
+- app/dps_simulation_panel.py: metricas reais e layout DPS compacto.
+- app/multimedia_tab.py: coluna direita limitada a 270px.
+
+4. Analise ao vivo
+- app/dps_simulation_panel.py: redesenho limitado a 66ms.
+- app/dps_simulation_panel.py: OCR executado em QThread.
+- app/dps_simulation_panel.py: timeout de inatividade de 12 segundos.
+- app/dps_simulation_panel.py: auto-stop permitido apos 15 segundos.
+- app/dps_simulation_panel.py: campo Fim da analise e marcador de corte.
+- app/dps_simulation_panel.py: ponto t0 zerado no inicio da analise.
+- app/dps_simulation_panel.py: inicio do DPS fixado no tempo configurado.
+- app/dps_simulation_panel.py: OCR sem frame-skip nos primeiros 2 segundos.
+- app/dps_simulation_panel.py: amostragem normal limitada a 8 FPS.
+- app/dps_simulation_panel.py: ROI central aplicada antes do OCR.
+
+5. Video e FFmpeg
+- app/dps_simulation_panel.py: VideoCapture usando cv2.CAP_FFMPEG.
+- app/dps_simulation_panel.py: seek usando CAP_PROP_POS_MSEC.
+- app/dps_simulation_panel.py: primeiro frame inicial validado apos seek.
+
+6. Importacao de build cards
+- utils/ocr.py: Crit DMG, Critical Damage e Crit Dano aceitos.
+- utils/ocr.py: Crit Rate e variantes normalizados.
+- utils/ocr.py: Energy Regen, Energy Recharge e Recarga de Energia aceitos.
+- utils/ocr.py: segunda leitura ampliada para cards compactos.
+- app/main.py: cards sem personagem identificado podem ser importados.
+
+7. Compatibilidade PaddleOCR
+- utils/ocr.py: modo Python de protobuf configurado antes do import.
+- requirements.txt: protobuf limitado a >=3.20.2,<4.0.0.
+
+8. Atualizacao real do kit da Augusta
+- data/characters_kits.py: linha do Ataque Básico corrigida.
+- data/characters_kits.py: nome definido como "Ataque Básico - Caminho da Caçadora".
+- data/characters_kits.py: descrição completa do ataque básico adicionada no campo "description".
+
+9. Renderizacao HTML das descricoes de habilidades
+- app/resonator_tab.py: descricoes com tags font, b, i e br agora usam RichText.
+- app/resonator_tab.py: descricoes sem HTML continuam usando o estilo normal do painel.
+
+10. Destaque de tipos de habilidade da Augusta
+- data/characters_kits.py: Corte Giratório e Uppercut deixaram de usar italico.
+- data/characters_kits.py: Corte Giratório e Uppercut agora usam negrito e destaque ciano.
+
+11. Destaque de Trovão Rugidor: Recuo
+- data/characters_kits.py: Trovão Rugidor: Recuo deixou de usar italico.
+- data/characters_kits.py: Trovão Rugidor: Recuo agora usa negrito e destaque ciano, igual a Corte Giratório.
+
+12. Descricoes completas do kit da Augusta
+- data/characters_kits.py: Habilidade de Ressonância definida como Lâmina da Guerreira.
+- data/characters_kits.py: Circuito Forte definido como Invoca-me pelo Sol.
+- data/characters_kits.py: Liberação de Ressonância definida como Conquista em Direção ao Sol.
+- data/characters_kits.py: descrições de Ressonância, Circuito, Liberação, Ascendência, Majestade, Reino, Intro, Outro e Habilidades Inatas adicionadas.
+
+13. Formato de linhas das descricoes de habilidades
+- app/resonator_tab.py: descricoes multilinha agora usam linhas com marcador e <br>.
+- app/resonator_tab.py: termos de habilidade, dano e recursos recebem destaque colorido.
+
+14. Separacao das habilidades da Augusta
+- data/characters_kits.py: Intro, Outro, Coroa de Vontades, Inata 1 e Inata 2 removidos do card de Liberação.
+- data/characters_kits.py: cada habilidade recebeu seu proprio card com name e description.
+
+15. Compactacao das linhas dos cards da Augusta
+- app/resonator_tab.py: quebras simples dentro do mesmo parágrafo agora são unificadas.
+- app/resonator_tab.py: cada bloco de conteúdo usa um único marcador e uma quebra HTML.
+
+16. Resumo dos cards da Augusta
+- data/characters_kits.py: habilidades da Augusta resumidas no mesmo padrão compacto do Ataque Básico.
+- data/characters_kits.py: todos os cards mantêm bullets, quebras HTML e destaques de habilidades.
+
+
+==================================================
+PROTECOES READALL - QNetworkReply
+
+As leituras de rede foram protegidas para evitar:
+QIODevice::read (QSslSocket): device not open
+
+==================================================
+app/teams_tab.py
+==================================================
+
+Linhas 35-42 - Helper de leitura segura:
+
+
+def _read_network_reply(reply: object) -> object:
+    if (
+        not getattr(reply, "isOpen", lambda: False)()
+        or getattr(reply, "error", lambda: QNetworkReply.NetworkError.UnknownNetworkError)()
+        != QNetworkReply.NetworkError.NoError
+    ):
+        return b""
+    return getattr(reply, "readAll", lambda: b"")()
+
+Chamadas protegidas nas linhas 157, 592, 696, 735, 746 e 766:
+
+pixmap.loadFromData(_read_network_reply(reply))
+
+==================================================
+app/history_tab.py
+==================================================
+
+Linhas 31-38 - Helper de leitura segura:
+
+
+def _read_network_reply(reply: object) -> object:
+    if (
+        not getattr(reply, "isOpen", lambda: False)()
+        or getattr(reply, "error", lambda: QNetworkReply.NetworkError.UnknownNetworkError)()
+        != QNetworkReply.NetworkError.NoError
+    ):
+        return b""
+    return getattr(reply, "readAll", lambda: b"")()
+
+Chamada protegida na linha 494:
+
+pixmap.loadFromData(_read_network_reply(reply))
+
+==================================================
+app/resonator_tab.py
+==================================================
+
+Linhas 42-49 - Helper de leitura segura:
+
+
+def _read_network_reply(reply: object) -> object:
+    if (
+        not getattr(reply, "isOpen", lambda: False)()
+        or getattr(reply, "error", lambda: QNetworkReply.NetworkError.UnknownNetworkError)()
+        != QNetworkReply.NetworkError.NoError
+    ):
+        return b""
+    return getattr(reply, "readAll", lambda: b"")()
+
+Chamada protegida na linha 596:
+
+data = _read_network_reply(reply)
+
+==================================================
+IMPORTS NECESSARIOS
+==================================================
+
+Nos tres arquivos, foi adicionado QNetworkReply ao import:
+
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+
+==================================================
+COMPORTAMENTO
+==================================================
+
+O helper so chama readAll() quando:
+
+reply.isOpen() == True
+reply.error() == QNetworkReply.NetworkError.NoError
+
+Quando o socket estiver fechado ou houver erro de rede, retorna:
+
+b""
+
+Os logs de erro e warning continuam ativos. Apenas a tentativa insegura de leitura e evitada.
