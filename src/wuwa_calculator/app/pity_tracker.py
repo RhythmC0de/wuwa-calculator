@@ -48,7 +48,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.wuwa_calculator.app.security_policy import allows_remote_content
-from src.wuwa_calculator.app.styles import wallpaper_palette
+from src.wuwa_calculator.ui.styles.styles import wallpaper_palette
 EVENT_RESONATOR_BANNER_URL = "https://i.imgur.com/JrRW9Bt.jpeg"
 SIGNATURE_WEAPON_BANNER_URL = "https://i.imgur.com/metoowt.jpeg"
 

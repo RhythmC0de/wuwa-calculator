@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QVBoxLayout, QWidget, QFrame,
 )
 
-from src.wuwa_calculator.app.components import Card, TitleLabel, apply_glow
+from wuwa_calculator.ui.components.components import Card, TitleLabel, apply_glow
 from src.wuwa_calculator.app.security_policy import allows_remote_content
 from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
 from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS

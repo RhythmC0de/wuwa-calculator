@@ -2,8 +2,8 @@
 """Validate character data consistency across all catalogs."""
 
 from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
-from src.data.characters_elements import CHARACTER_ELEMENTS
-from src.data.characters_quotes import CHARACTER_QUOTES
+from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from src.wuwa_calculator.data.characters_quotes import CHARACTER_QUOTES
 from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
 from src.wuwa_calculator.data.characters_urls import RACKOON_CHARACTER_SLUGS
 from src.wuwa_calculator.data.weapons import _LOCAL_KIT_WEAPON_NAMES

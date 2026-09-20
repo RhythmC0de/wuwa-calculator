@@ -28,10 +28,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.wuwa_calculator.app.components import Card, TitleLabel, WuWaKuroBannerCard
-from src.wuwa_calculator.app.banner_service import fetch_current_banner
-from src.wuwa_calculator.app.pity_tracker import PityTrackerWidget
-from src.wuwa_calculator.app.styles import apply_glow
+from wuwa_calculator.ui.components.components import Card, TitleLabel, WuWaKuroBannerCard
+from wuwa_calculator.app.banner_service import fetch_current_banner
+from wuwa_calculator.app.pity_tracker import PityTrackerWidget
+from src.wuwa_calculator.ui.styles.styles import apply_glow
 from src.wuwa_calculator.storage.banner_cache import load_cached_banner, save_cached_banner
 
 
@@ -131,7 +131,7 @@ class CatalogWorker(QObject):
     finished = Signal(object)
 
     def run(self) -> None:
-        from src.wuwa_calculator.app.wuwa_tracker_adapter import fetch_banner_catalog
+        from wuwa_calculator.infrastructure.wuwa_tracker_adapter import fetch_banner_catalog
         self.finished.emit(fetch_banner_catalog())
 
 

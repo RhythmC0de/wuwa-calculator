@@ -28,9 +28,9 @@ if __package__ in {None, ""}:
 # The application supports direct execution, so local imports depend on the
 # path adjustment above.
 # pylint: disable=wrong-import-position
-from src.wuwa_calculator.app.backend_adapter import calculate_character_damage
-from src.wuwa_calculator.app.components import Card, TitleLabel
-from src.wuwa_calculator.app.styles import apply_element_glow, apply_glow
+from wuwa_calculator.infrastructure.backend_adapter import calculate_character_damage
+from wuwa_calculator.ui.components.components import Card, TitleLabel
+from src.wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
 from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
 from src.wuwa_calculator.data.characters_kits import CHARACTER_KITS_DB, MANUAL_CHARACTER_KITS
 from src.wuwa_calculator.data.characters_quotes import CHARACTER_QUOTES

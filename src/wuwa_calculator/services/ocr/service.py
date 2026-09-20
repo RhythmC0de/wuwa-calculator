@@ -21,7 +21,7 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.wuwa_calculator.utils.image_processing import prepare_for_ocr  # pylint: disable=wrong-import-position
+from wuwa_calculator.services.image.image_processing import prepare_for_ocr  # pylint: disable=wrong-import-position
 from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
 
 SEP = r"\s*[:=]?\s*"

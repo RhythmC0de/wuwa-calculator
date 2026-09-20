@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.wuwa_calculator.app.components import Card, TitleLabel
+from wuwa_calculator.ui.components.components import Card, TitleLabel
 from src.wuwa_calculator.app.dps_simulation_panel import DpsSimulationPanel
 from src.wuwa_calculator.app.history_video_player import HistoryVideoPlayer
 

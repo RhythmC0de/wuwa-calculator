@@ -13,16 +13,16 @@ from PySide6.QtWidgets import (
     QStyledItemDelegate,
 )
 
-from src.wuwa_calculator.app.components import Card, DataTable, MetricCard, TitleLabel
-from src.wuwa_calculator.app.teams_tab import CharacterBadgeWidget
-from src.wuwa_calculator.app.backend_adapter import (
+from wuwa_calculator.ui.components.components import Card, DataTable, MetricCard, TitleLabel
+from wuwa_calculator.ui.tabs.teams_tab import CharacterBadgeWidget
+from wuwa_calculator.infrastructure.backend_adapter import (
     ROTATION_HISTORY_FILE,
     export_history_file,
     history_records,
     import_history_file,
     save_history_record,
 )
-from src.wuwa_calculator.app.styles import apply_glow
+from src.wuwa_calculator.ui.styles.styles import apply_glow
 from src.wuwa_calculator.storage.team_storage import load_teams
 from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
 from src.wuwa_calculator.app.security_policy import allows_remote_content
