@@ -186,6 +186,7 @@ class HistoryVideoPlayer(Card):
         self._position_video_hud()
         if self._is_fullscreen:
             self._position_fullscreen_overlay()
+        QTimer.singleShot(0, self._refresh_video_surface)
 
     def _build_fullscreen_overlay(self) -> None:
         self.fullscreen_overlay = QWidget(self.video_surface)
@@ -486,10 +487,6 @@ class HistoryVideoPlayer(Card):
     def _clock(milliseconds: int) -> str:
         total = max(0, int(milliseconds / 1000))
         return f"{total // 60}:{total % 60:02d}"
-
-    def resizeEvent(self, event: QResizeEvent) -> None:
-        super().resizeEvent(event)
-        QTimer.singleShot(0, self._refresh_video_surface)
 
     def closeEvent(self, event) -> None:
         self.exit_fullscreen()
