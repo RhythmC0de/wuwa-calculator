@@ -18,7 +18,7 @@ def main() -> int:
     # o FFmpeg do sistema usado pelo OpenCV da engine falha com
     # "undefined symbol: av_amf_extract_hdr_metadata". Ordem inversa funciona.
     try:
-        from wuwa_calculator.app.native_engine import load_engine
+        from wuwa_calculator.infrastructure.native_engine import load_engine
 
         load_engine()
     except ImportError as error:  # sem engine o app abre; a análise avisa depois

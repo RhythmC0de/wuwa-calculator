@@ -80,7 +80,7 @@ class _NativeAnalysisThread(QThread):
             # O localizador procura a extensão compilada em Windows e Linux
             # (native/damage_analyzer/build) sem depender de PYTHONPATH.
             try:
-                from . import native_engine
+                from ...app import native_engine
             except ImportError:
                 import native_engine  # type: ignore[no-redef]
 

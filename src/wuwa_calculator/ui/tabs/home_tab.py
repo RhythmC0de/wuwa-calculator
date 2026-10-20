@@ -27,8 +27,8 @@ from PySide6.QtWidgets import (
 )
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel, WuWaKuroBannerCard
-from wuwa_calculator.app.banner_service import fetch_current_banner
-from wuwa_calculator.app.pity_tracker import PityTrackerWidget
+from wuwa_calculator.infrastructure.banner_service import fetch_current_banner
+from wuwa_calculator.ui.panels.pity_tracker import PityTrackerWidget
 from wuwa_calculator.ui.styles.styles import apply_glow
 from wuwa_calculator.storage.banner_cache import load_cached_banner, save_cached_banner
 

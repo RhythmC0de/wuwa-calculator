@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (
 
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel
-from wuwa_calculator.app.dps_simulation_panel import DpsSimulationPanel
-from wuwa_calculator.app.history_video_player import HistoryVideoPlayer
+from wuwa_calculator.ui.panels.dps_simulation_panel import DpsSimulationPanel
+from wuwa_calculator.ui.panels.history_video_player import HistoryVideoPlayer
 
 
 EVENTS = (

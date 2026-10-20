@@ -23,7 +23,7 @@ from wuwa_calculator.ui.components.components import Card
 def _native_engine_module():
     """Importa o localizador da engine (pacote ou execução direta)."""
     try:
-        from . import native_engine
+        from ...app import native_engine
     except ImportError:
         import native_engine  # type: ignore[no-redef]
     return native_engine

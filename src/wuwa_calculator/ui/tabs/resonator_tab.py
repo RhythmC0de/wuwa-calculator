@@ -1,7 +1,8 @@
 """Native PySide6 Resonator detail screen backed by local character databases."""
 
 # * EDITAVEL: esta tela monta banner, atributos, arma, habilidades e calculo de dano.
-# ? O elemento vem de data/characters_elements.py e controla badge, card e glow.
+# ? Os dados vêm de infrastructure/catalog.py (JSON em data/characters) no idioma
+# ? escolhido em ui/language.py. O elemento controla badge, card e glow.
 
 from __future__ import annotations
 
@@ -9,7 +10,6 @@ import html
 import re
 import sys
 from pathlib import Path
-from typing import Any
 
 # PySide6 is provided by the application's runtime environment; keep static
 # analyzers from flagging the optional GUI dependency when it is not installed.
@@ -29,13 +29,10 @@ from PySide6.QtWidgets import (
 from wuwa_calculator.infrastructure.backend_adapter import calculate_character_damage
 from wuwa_calculator.ui.components.components import Card, TitleLabel
 from wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
-from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
-from wuwa_calculator.data.characters_kits import CHARACTER_KITS_DB, MANUAL_CHARACTER_KITS
-from wuwa_calculator.data.characters_quotes import CHARACTER_QUOTES
-from wuwa_calculator.data.characters_stats import CHARACTER_STATS_DB
-from wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
-from wuwa_calculator.data.weapons import MANUAL_WEAPONS, _LOCAL_KIT_WEAPON_NAMES
-from wuwa_calculator.app.security_policy import allows_local_image, allows_remote_content
+from wuwa_calculator.infrastructure import catalog
+from wuwa_calculator.infrastructure.catalog import Character, Skill, Weapon
+from wuwa_calculator.ui.language import language_settings
+from wuwa_calculator.infrastructure.security_policy import allows_local_image, allows_remote_content
 
 
 def _read_network_reply(reply: object) -> bytes:
@@ -52,7 +49,8 @@ class ResonatorTab(QWidget):
     def __init__(self, parent: QWidget | None = None, initial_id: str | None = None) -> None:
         super().__init__(parent)
         self.current_id = ""
-        self.language = "PT-BR"
+        self.language = language_settings().code
+        self._character: Character | None = None
         self.network = QNetworkAccessManager(self)
         self._image_replies: dict[str, object] = {}
         self._element_glow_widgets: list[tuple[QWidget, float, int]] = []
@@ -171,6 +169,7 @@ class ResonatorTab(QWidget):
         language_row.addWidget(QLabel("Idioma"))
         self.language_box = QComboBox()
         self.language_box.addItems(["PT-BR", "EN"])
+        self.language_box.setCurrentText(self.language)
         language_row.addWidget(self.language_box)
         language_row.addStretch(1)
         weapon_layout.addLayout(language_row)
@@ -254,7 +253,9 @@ class ResonatorTab(QWidget):
         columns.addLayout(right, 1)
         root.addLayout(columns, 1)
 
-        self.language_box.currentTextChanged.connect(self._set_language)
+        # A caixa escreve no idioma global; o sinal global redesenha os textos.
+        self.language_box.currentTextChanged.connect(language_settings().set_language)
+        language_settings().changed.connect(self._set_language)
         self.element_box.currentTextChanged.connect(
             self._element_changed
         )
@@ -405,9 +406,7 @@ class ResonatorTab(QWidget):
         after_critical = after_bonus * values["crit_multiplier"]
         after_defense = after_critical * values["defense_factor"]
         escape = html.escape
-        kit = CHARACTER_KITS_DB.get(self.current_id) or MANUAL_CHARACTER_KITS.get(self.current_id) or {}
-        kit_passive = str(kit.get("weapon_passive", "Passiva não cadastrada"))
-        weapon_passive = self.weapon_passive_text or kit_passive
+        weapon_passive = self.weapon_passive_text or "Passiva não cadastrada"
         self.damage_details.setText(
             "<b>Modelo utilizado</b><br>"
             "Dano = (ATK Total x Mod. Habilidade) x (1 + soma dos bônus) x "
@@ -438,11 +437,10 @@ class ResonatorTab(QWidget):
         )
 
     def _render_character(self, character_id: str) -> None:
-        display_name = character_id.title()
-        self.character_name.setText(display_name)
-        element = CHARACTER_ELEMENTS.get(character_id)
-        if element:
-            self.element_box.setCurrentText(element)
+        character = catalog.character(character_id, self.language)
+        self._character = character
+        if character.element:
+            self.element_box.setCurrentText(character.element)
         current_element = self.element_box.currentText()
         self.element_badge.setText(f"{self._element_icon(current_element)} {current_element}")
         self.element_badge.setProperty("element", current_element)
@@ -450,27 +448,28 @@ class ResonatorTab(QWidget):
         self.element_badge.style().polish(self.element_badge)
         apply_element_glow(self.character_image, current_element, blur=12, opacity=85)
         apply_element_glow(self.weapon_image, current_element, blur=10, opacity=70)
-        quotes = CHARACTER_QUOTES.get(character_id, ())
-        self.character_quote.setText(" / ".join(quotes))
-        stats = CHARACTER_STATS_DB.get(character_id, {})
         for key, label in self.stat_labels.items():
-            label.setText(str(stats.get(key, "--")))
+            label.setText(str((character.stats or {}).get(key, "--")))
 
-        kit = CHARACTER_KITS_DB.get(character_id) or MANUAL_CHARACTER_KITS.get(character_id) or {}
-        team_buffs = kit.get("team_buffs", []) if isinstance(kit, dict) else []
-        personal_buffs = kit.get("personal_buffs", []) if isinstance(kit, dict) else []
-        if team_buffs:
-            self.supports_bonus_entry.setText(", ".join(f"{name}: {value}%" for name, value in team_buffs))
-        if personal_buffs:
-            self.supports_passive_entry.setText(", ".join(f"{name}: {value}%" for name, value in personal_buffs))
-        weapon_name = str(_LOCAL_KIT_WEAPON_NAMES.get(character_id, kit.get("weapon_name", "Arma não cadastrada")))
-        manual_weapon = MANUAL_WEAPONS.get(character_id, {})
-        self.weapon_name.setText(str(manual_weapon.get("name", weapon_name)))
-        self._render_weapon(manual_weapon, kit)
-        self._render_kit(kit)
-        fallback = CHARACTER_IMAGE_FALLBACKS.get(character_id, {})
-        self._load_image(str(fallback.get("char", "")), self.character_image, "Sem imagem")
-        self._load_image(str(fallback.get("weapon", "")), self.weapon_image, "Sem imagem")
+        if character.team_buffs:
+            self.supports_bonus_entry.setText(
+                ", ".join(f"{name}: {value:g}%" for name, value in character.team_buffs)
+            )
+        if character.personal_buffs:
+            self.supports_passive_entry.setText(
+                ", ".join(f"{name}: {value:g}%" for name, value in character.personal_buffs)
+            )
+        self._render_texts(character)
+        self._load_image(character.image_character, self.character_image, "Sem imagem")
+        self._load_image(character.image_weapon, self.weapon_image, "Sem imagem")
+
+    def _render_texts(self, character: Character) -> None:
+        """Tudo que depende do idioma (não recarrega imagens nem recalcula nada)."""
+        self.character_name.setText(character.name)
+        self.character_quote.setText(" / ".join(character.quotes))
+        self.weapon_name.setText(character.weapon.name or "Arma não cadastrada")
+        self._render_weapon(character.weapon)
+        self._render_kit(character.skills)
 
     def apply_imported_stats(self, stats: dict[str, float]) -> None:
         """Aplica na aba os atributos reconhecidos de uma imagem."""
@@ -545,24 +544,18 @@ class ResonatorTab(QWidget):
             formatted.append(f"• {escaped}<br>")
         return "".join(formatted)
 
-    def _render_weapon(self, manual: dict[str, Any], kit: dict[str, Any]) -> None:
-        if manual:
-            text = str(manual.get(self.language, manual.get("EN", "")))
-        else:
-            text = str(kit.get("weapon_passive", "Passiva não cadastrada"))
+    def _render_weapon(self, weapon: Weapon) -> None:
+        text = weapon.passive or "Passiva não cadastrada"
         self.weapon_passive_text = self._clean_display_text(text)
         self.weapon_text.setText(self._styled_text(text))
 
-    def _render_kit(self, kit: dict[str, Any]) -> None:
+    def _render_kit(self, skills: tuple[Skill, ...]) -> None:
         while self.kit_layout.count():
             item = self.kit_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self._element_glow_widgets = self._element_glow_widgets[:3]
-        skills = kit.get("skills", []) if isinstance(kit, dict) else []
         for skill in skills:
-            if not isinstance(skill, dict):
-                continue
             card = QFrame()
             card.setObjectName("skillCard")
             self._element_glow_widgets.append((card, 14, 90))
@@ -574,9 +567,9 @@ class ResonatorTab(QWidget):
             icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
             card_layout.addWidget(icon)
             text_layout = QVBoxLayout()
-            title = QLabel(self._styled_text(str(skill.get("name", "Habilidade")), skill_name=True))
+            title = QLabel(self._styled_text(skill.name or "Habilidade", skill_name=True))
             title.setObjectName("skillTitle")
-            description = str(skill.get("description", "Sem descrição"))
+            description = skill.description or "Sem descrição"
             description = self._format_skill_description(description)
             body = QLabel(
                 description
@@ -597,9 +590,13 @@ class ResonatorTab(QWidget):
 
     def _set_language(self, language: str) -> None:
         self.language = language
+        if self.language_box.currentText() != language:
+            self.language_box.blockSignals(True)
+            self.language_box.setCurrentText(language)
+            self.language_box.blockSignals(False)
         if self.current_id:
-            kit = CHARACTER_KITS_DB.get(self.current_id) or MANUAL_CHARACTER_KITS.get(self.current_id) or {}
-            self._render_weapon(MANUAL_WEAPONS.get(self.current_id, {}), kit)
+            self._character = catalog.character(self.current_id, language)
+            self._render_texts(self._character)
 
     def _load_image(self, url: str, target: QLabel, fallback: str) -> None:
         if not url:

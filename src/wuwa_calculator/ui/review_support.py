@@ -278,7 +278,7 @@ class ReviewSupport(QObject):
             self._ensure_crops_then(self.open_review)
             return
 
-        from ..ui.dialogs.damage_review_dialog import DamageReviewDialog
+        from .dialogs.damage_review_dialog import DamageReviewDialog
 
         dialog = DamageReviewDialog(
             queue, self._crops, self.widget.window(), initial=self._decisions

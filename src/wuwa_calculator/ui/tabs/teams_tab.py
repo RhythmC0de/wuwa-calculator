@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel, apply_glow
-from wuwa_calculator.app.security_policy import allows_remote_content
+from wuwa_calculator.infrastructure.security_policy import allows_remote_content
 from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
 from wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
 from wuwa_calculator.data.echoes import ECHOES_DB
