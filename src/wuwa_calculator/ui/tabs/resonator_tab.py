@@ -22,22 +22,20 @@ from PySide6.QtWidgets import (
     QTabWidget, QVBoxLayout, QWidget,
 )
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # The application supports direct execution, so local imports depend on the
 # path adjustment above.
 # pylint: disable=wrong-import-position
 from wuwa_calculator.infrastructure.backend_adapter import calculate_character_damage
 from wuwa_calculator.ui.components.components import Card, TitleLabel
-from src.wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
-from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
-from src.wuwa_calculator.data.characters_kits import CHARACTER_KITS_DB, MANUAL_CHARACTER_KITS
-from src.wuwa_calculator.data.characters_quotes import CHARACTER_QUOTES
-from src.wuwa_calculator.data.characters_stats import CHARACTER_STATS_DB
-from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
-from src.wuwa_calculator.data.weapons import MANUAL_WEAPONS, _LOCAL_KIT_WEAPON_NAMES
-from src.wuwa_calculator.app.security_policy import allows_local_image, allows_remote_content
+from wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
+from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from wuwa_calculator.data.characters_kits import CHARACTER_KITS_DB, MANUAL_CHARACTER_KITS
+from wuwa_calculator.data.characters_quotes import CHARACTER_QUOTES
+from wuwa_calculator.data.characters_stats import CHARACTER_STATS_DB
+from wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
+from wuwa_calculator.data.weapons import MANUAL_WEAPONS, _LOCAL_KIT_WEAPON_NAMES
+from wuwa_calculator.app.security_policy import allows_local_image, allows_remote_content
 
 
 def _read_network_reply(reply: object) -> bytes:

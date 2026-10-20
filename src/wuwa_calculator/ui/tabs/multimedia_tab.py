@@ -12,12 +12,10 @@ from PySide6.QtWidgets import (
     QPushButton, QVBoxLayout, QWidget, QFrame, QSizePolicy,
 )
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel
-from src.wuwa_calculator.app.dps_simulation_panel import DpsSimulationPanel
-from src.wuwa_calculator.app.history_video_player import HistoryVideoPlayer
+from wuwa_calculator.app.dps_simulation_panel import DpsSimulationPanel
+from wuwa_calculator.app.history_video_player import HistoryVideoPlayer
 
 
 EVENTS = (

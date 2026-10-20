@@ -22,10 +22,10 @@ from wuwa_calculator.infrastructure.backend_adapter import (
     import_history_file,
     save_history_record,
 )
-from src.wuwa_calculator.ui.styles.styles import apply_glow
-from src.wuwa_calculator.storage.team_storage import load_teams
-from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
-from src.wuwa_calculator.app.security_policy import allows_remote_content
+from wuwa_calculator.ui.styles.styles import apply_glow
+from wuwa_calculator.storage.team_storage import load_teams
+from wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
+from wuwa_calculator.app.security_policy import allows_remote_content
 
 
 def _read_network_reply(reply: object) -> object:

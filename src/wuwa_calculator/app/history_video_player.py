@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import os
 import sys
+from importlib import import_module
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSignalBlocker, QTimer, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QSignalBlocker, QThread, QTimer, Qt, QUrl, Signal
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -27,8 +28,6 @@ from PySide6.QtWidgets import (
 
 # Allow direct execution from the app/ directory while keeping package imports
 # as the canonical path used by the Tethys launcher.
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel
 
@@ -56,6 +55,61 @@ class ClickableSeekSlider(QSlider):
         super().mousePressEvent(event)
 
 
+# [EXTRAIR] Integração de infraestrutura, não responsabilidade do widget.
+# Este worker pode ser movido para services/native_analysis_worker.py quando
+# a arquitetura de serviços do projeto estiver pronta.
+class _NativeAnalysisThread(QThread):
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, video_path: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.video_path = video_path
+        self._cancel_token = None
+        self._cancel_requested = False
+
+    def cancel(self) -> None:
+        """Pede à engine que pare no próximo frame (seguro entre threads)."""
+        self._cancel_requested = True
+        token = self._cancel_token
+        if token is not None:
+            token.cancel()
+
+    def run(self) -> None:
+        try:
+            # O localizador procura a extensão compilada em Windows e Linux
+            # (native/damage_analyzer/build) sem depender de PYTHONPATH.
+            try:
+                from . import native_engine
+            except ImportError:
+                import native_engine  # type: ignore[no-redef]
+
+            damage_analyzer = native_engine.load_engine()
+
+            config = damage_analyzer.AnalyzerConfig()
+            # A engine resolve os modelos padrão quando esses campos ficam
+            # vazios. Não duplicamos em Python a lógica de localização dos
+            # modelos nem os algoritmos de processamento da engine.
+            config.model_path = ""
+            config.dictionary_path = ""
+            self._cancel_token = damage_analyzer.CancelToken()
+            config.cancel_token = self._cancel_token
+            if self._cancel_requested:
+                return
+
+            result = damage_analyzer.analyze_video(
+                self.video_path,
+                0.0,
+                -1.0,
+                config,
+            )
+            if self._cancel_requested:
+                return
+            self.completed.emit(result)
+        except Exception as exc:
+            self.failed.emit(f"{type(exc).__name__}: {exc}")
+
+
 class HistoryVideoPlayer(Card):
     """Player local incorporável baseado exclusivamente em QtMultimedia.
 
@@ -64,6 +118,8 @@ class HistoryVideoPlayer(Card):
 
     videoLoaded = Signal(str)
     videoStopped = Signal()
+    analysisCompleted = Signal(object)
+    analysisFailed = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -74,6 +130,8 @@ class HistoryVideoPlayer(Card):
         self._source_ready = False
         self._is_fullscreen = False
         self._last_display_second = -1
+        self._analysis_thread = None
+        self._analysis_running = False
         self._fullscreen_hide_timer = QTimer(self)
         self._fullscreen_hide_timer.setSingleShot(True)
         self._fullscreen_hide_timer.setInterval(2500)
@@ -145,6 +203,15 @@ class HistoryVideoPlayer(Card):
         controls.addWidget(self.browse_button)
         controls.addWidget(self.play_button)
         controls.addWidget(self.stop_button)
+
+        # A análise usa a engine C++/pybind11; o player continua responsável
+        # apenas por dispará-la e apresentar o estado. Veja os marcadores
+        # [EXTRAIR] abaixo para mover a integração para um serviço separado.
+        self.analyze_button = self._button("Analisar")
+        self.analyze_button.setObjectName("mediaAnalyzeButton")
+        self.analyze_button.setToolTip("Analisar os números de dano deste vídeo")
+        self.analyze_button.setEnabled(False)
+        controls.addWidget(self.analyze_button)
         controls.addWidget(self.progress_slider, 1)
 
         self.time_label = QLabel("0:00 / 0:00")
@@ -251,6 +318,7 @@ class HistoryVideoPlayer(Card):
 
     def _connect_signals(self) -> None:
         self.browse_button.clicked.connect(self.choose_video)
+        self.analyze_button.clicked.connect(self.analyze_video)
         self.play_button.clicked.connect(self.toggle_playback)
         self.stop_button.clicked.connect(self.stop_video)
         self.volume_slider.valueChanged.connect(self.set_volume)
@@ -284,6 +352,9 @@ class HistoryVideoPlayer(Card):
             self.load_video(path)
 
     def load_video(self, path: str) -> bool:
+        if self._analysis_running:
+            self._set_status("Aguarde a análise atual terminar antes de trocar o vídeo")
+            return False
         if not os.path.isfile(path):
             self._set_status("Arquivo de vídeo não encontrado")
             return False
@@ -291,8 +362,10 @@ class HistoryVideoPlayer(Card):
         self.video_path = str(Path(path).resolve())
         self._source_ready = False
         self.title_label.setText(Path(path).name)
+        self.hud_label.setText("LIVE ANALYZER  //  READY")
         self._set_status(f"Carregando: {Path(path).name}")
         self._set_controls_enabled(True)
+        self.analyze_button.setEnabled(not self._analysis_running)
         self.media_player.setSource(QUrl.fromLocalFile(self.video_path))
         self.videoLoaded.emit(self.video_path)
         self.media_player.play()
@@ -325,6 +398,7 @@ class HistoryVideoPlayer(Card):
         self.play_button.setText("▶")
         self._set_status("PRONTO")
         self._set_controls_enabled(False)
+        self.analyze_button.setEnabled(False)
         self._reset_subtitles()
         self.videoStopped.emit()
 
@@ -473,6 +547,67 @@ class HistoryVideoPlayer(Card):
             self.subtitle_box.clear()
             self.subtitle_box.addItem("Legendas desativadas", -1)
 
+    # [EXTRAIR] Esta classe worker e o método analyze_video não são lógica do
+    # player. Ao estabilizar a integração, mova-os para um módulo como
+    # wuwa_calculator.services.damage_analysis e deixe aqui apenas os sinais.
+    def analyze_video(self) -> None:
+        """Executa a engine nativa sem bloquear o loop de eventos do Qt.
+
+        A extensão ``damage_analyzer`` deve estar compilada/instalável no
+        ambiente Python. O processamento de frames/OCR/filtros permanece em C++.
+        """
+        if not self.video_path or not os.path.isfile(self.video_path):
+            self._set_status("Selecione um vídeo válido antes de analisar")
+            return
+        if self._analysis_running:
+            return
+
+        self._analysis_running = True
+        self.analyze_button.setEnabled(False)
+        self._set_status("Analisando vídeo…")
+        self.hud_label.setText("DAMAGE ANALYSIS  //  RUNNING")
+
+        thread = _NativeAnalysisThread(self.video_path, self)
+        self._analysis_thread = thread
+        thread.completed.connect(self._on_analysis_completed)
+        thread.failed.connect(self._on_analysis_failed)
+        thread.finished.connect(self._on_analysis_thread_finished)
+        thread.start()
+
+    def _on_analysis_completed(self, result: object) -> None:
+        """Publica resultado da engine sem acoplar o player ao painel de DPS."""
+        total = getattr(result, "total_damage", 0)
+        hits = getattr(result, "total_hits", 0)
+        peak = getattr(result, "peak_damage", 0)
+        self._set_status(f"Análise concluída · {hits} acertos · dano {total:,.0f}")
+        self.hud_label.setText("DAMAGE ANALYSIS  //  COMPLETE")
+        self.analysisCompleted.emit(result)
+
+    def _on_analysis_failed(self, message: str) -> None:
+        self._set_status(f"Falha na análise: {message}")
+        self.hud_label.setText("DAMAGE ANALYSIS  //  ERROR")
+        self.analysisFailed.emit(message)
+
+    def _on_analysis_thread_finished(self) -> None:
+        self._analysis_running = False
+        self.analyze_button.setEnabled(bool(self.video_path))
+        thread = self._analysis_thread
+        self._analysis_thread = None
+        if thread is not None:
+            thread.deleteLater()
+
+    def shutdown_analysis(self) -> None:
+        """Cancela a engine e aguarda a thread terminar (no próximo frame).
+
+        Também é chamado pela janela principal ao fechar: widgets filhos não
+        recebem closeEvent quando a janela fecha, e destruir um QThread ainda
+        ativo derruba o processo.
+        """
+        thread = self._analysis_thread
+        if thread is not None and thread.isRunning():
+            thread.cancel()
+            thread.wait()
+
     def _set_controls_enabled(self, enabled: bool) -> None:
         self.play_button.setEnabled(enabled)
         self.stop_button.setEnabled(enabled)
@@ -490,5 +625,6 @@ class HistoryVideoPlayer(Card):
 
     def closeEvent(self, event) -> None:
         self.exit_fullscreen()
+        self.shutdown_analysis()
         self.stop_video()
         super().closeEvent(event)

@@ -1,7 +1,7 @@
 """ IDs of known characters in the game. """
 # * EDITAVEL: adicione ou remova IDs nesta lista; use a mesma chave nos outros arquivos data/.
 # ! IMPORTANTE: o ID deve ser minusculo e identico nos catalogos relacionados.
-KNOWN_CHARACTER_IDS = {
+KNOWN_CHARACTER_IDS = frozenset({
     "aalto", "aemeath", "augusta", "baizhi", "brant", "buling", "calcharo",
     "camellya", "cantarella", "carlotta", "cartethyia", "changli", "chisa",
     "chixia", "ciaccona", "danjin", "denia", "encore", "galbrena", "hiyuki",
@@ -12,4 +12,4 @@ KNOWN_CHARACTER_IDS = {
     "rover havoc", "rover", "sanhua", "shorekeeper", "sigrika", "suisui",
     "taoqi", "verina", "xuanling", "xiangli yao", "yangyang",
     "yangyang xuanling", "yinlin", "youhu", "yuanwu", "zani", "zhezhi",
-}
+})

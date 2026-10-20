@@ -15,8 +15,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from src.wuwa_calculator.ui.components.components import TitleLabel
-from src.wuwa_calculator.ui.components.components import Card
+from wuwa_calculator.ui.components.components import TitleLabel
+from wuwa_calculator.ui.components.components import Card
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

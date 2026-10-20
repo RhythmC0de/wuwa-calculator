@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+import logging
 import re
+import sys
 import unicodedata
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, Qt, QUrl
 from PySide6.QtGui import QPixmap, QResizeEvent
 # PySide6 exposes these widget classes dynamically; pylint cannot resolve them
 # from the package metadata and incorrectly reports E0611 for valid imports.
@@ -23,23 +27,31 @@ from PySide6.QtWidgets import (
 )
 # pylint: enable=no-name-in-module
 
-from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
-from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
-from src.wuwa_calculator.ui.components.components import Card
-from src.wuwa_calculator.ui.dialogs.about_dialog import AboutDialog
-from src.wuwa_calculator.ui.dialogs.import_stats_dialog import ImportDialog
-from src.wuwa_calculator.ui.dialogs.settings_dialog import SettingsDialog
-from src.wuwa_calculator.ui.dialogs.close_dialog import TETHYS_CLOSE_ICON_LOCAL, TETHYS_CLOSE_ICON_PATH, TETHYS_CLOSE_ICON_URL, TethysCloseDialog
-from src.wuwa_calculator.ui.tabs.placeholder_tab import PlaceholderTab
-from src.wuwa_calculator.ui.tabs.resonator_tab import ResonatorTab
-from src.wuwa_calculator.ui.components.components import TitleLabel
-from src.wuwa_calculator.ui.components.character_sidebar_button import CharacterSidebarButton
-from src.wuwa_calculator.ui.styles.styles import (
+from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from wuwa_calculator.services.characters.identity import resolve_character_id
+from wuwa_calculator.ui.components.components import Card
+from wuwa_calculator.ui.dialogs.close_dialog import TETHYS_CLOSE_ICON_LOCAL, TETHYS_CLOSE_ICON_PATH, TETHYS_CLOSE_ICON_URL, TethysCloseDialog
+from wuwa_calculator.ui.tabs.placeholder_tab import PlaceholderTab
+from wuwa_calculator.ui.components.components import TitleLabel
+from wuwa_calculator.ui.components.character_sidebar_button import CharacterSidebarButton
+from wuwa_calculator.ui.styles.styles import (
     accent_preset,
     application_qss,
     refresh_glows,
     wallpaper_palette,
 )
+
+
+def _resonator_tab_cls():
+    """Importa a aba de personagem sob demanda (módulo pesado)."""
+    from wuwa_calculator.ui.tabs.resonator_tab import ResonatorTab
+    return ResonatorTab
+
+
+def _is_resonator_tab(widget: object) -> bool:
+    """True para ResonatorTab sem importar o módulo se ele ainda não foi carregado."""
+    module = sys.modules.get("wuwa_calculator.ui.tabs.resonator_tab")
+    return module is not None and isinstance(widget, module.ResonatorTab)
 
 
 ELEMENT_NAV_COLORS = {
@@ -112,19 +124,19 @@ class WuwaQtWindow(QMainWindow):
         tabs.tabBar().hide()
         
         def build_home() -> QWidget:
-            from src.wuwa_calculator.ui.tabs.home_tab import HomeTab
+            from wuwa_calculator.ui.tabs.home_tab import HomeTab
             return HomeTab()
 
         def build_teams() -> QWidget:
-            from src.wuwa_calculator.ui.tabs.teams_tab import TeamsTab
+            from wuwa_calculator.ui.tabs.teams_tab import TeamsTab
             return TeamsTab()
 
         def build_history() -> QWidget:
-            from src.wuwa_calculator.ui.tabs.history_tab import HistoryTab
+            from wuwa_calculator.ui.tabs.history_tab import HistoryTab
             return HistoryTab()
 
         def build_multimedia() -> QWidget:
-            from src.wuwa_calculator.ui.tabs.multimedia_tab import MultimediaTab
+            from wuwa_calculator.ui.tabs.multimedia_tab import MultimediaTab
             return MultimediaTab()
 
         self._tab_factories = (
@@ -143,10 +155,6 @@ class WuwaQtWindow(QMainWindow):
         self.tabs = tabs
         for title in self._tab_titles:
             tabs.addTab(QWidget(), title)
-        multimedia_tab = build_multimedia()
-        tabs.removeTab(3)
-        tabs.insertTab(3, multimedia_tab, self._tab_titles[3])
-        self._tab_widgets[3] = multimedia_tab
         tabs.currentChanged.connect(self._handle_main_tab_changed)
         self._handle_main_tab_changed(0)
 
@@ -278,6 +286,12 @@ class WuwaQtWindow(QMainWindow):
             ):
                 event.ignore()
                 return
+        # Os widgets filhos não recebem closeEvent ao fechar a janela: cancela
+        # as análises da engine nativa e espera suas threads antes de sair.
+        for widget in self.findChildren(QWidget):
+            shutdown = getattr(widget, "shutdown_analysis", None)
+            if callable(shutdown):
+                shutdown()
         event.accept()
 
     def _add_sidebar_button(
@@ -307,20 +321,23 @@ class WuwaQtWindow(QMainWindow):
         return button
 
     def open_settings(self) -> None:
+        from wuwa_calculator.ui.dialogs.settings_dialog import SettingsDialog
         SettingsDialog(self).exec()
 
     def open_about(self) -> None:
+        from wuwa_calculator.ui.dialogs.about_dialog import AboutDialog
         AboutDialog(self).exec()
 
     def open_import_dialog(self) -> None:
         character_tab = self.tabs.currentWidget()
-        if not isinstance(character_tab, ResonatorTab):
+        if not _is_resonator_tab(character_tab):
             QMessageBox.information(
                 self,
                 "Personagem não carregado",
                 "Carregue uma ID de personagem antes de importar a imagem.",
             )
             return
+        from wuwa_calculator.ui.dialogs.import_stats_dialog import ImportDialog
         ImportDialog(self, character_tab).exec()
     
     def _select_main_tab(self, index: int, label: str) -> None:
@@ -333,7 +350,17 @@ class WuwaQtWindow(QMainWindow):
         if index in self._tab_widgets:
             return
         factory = self._tab_factories[index]
-        widget = factory()
+        try:
+            widget = factory()
+        except ImportError as error:
+            # Dependência opcional ausente (ex.: pyqtgraph): mostra o motivo na
+            # própria aba em vez de repetir o traceback a cada clique.
+            logging.getLogger(__name__).error("aba %s indisponível: %s", self._tab_titles[index], error)
+            widget = PlaceholderTab(
+                self._tab_titles[index],
+                f"Esta aba não pôde ser carregada:\n{error}\n\n"
+                "Instale as dependências com: pip install -r requirements.txt",
+            )
         old_widget = self.tabs.widget(index)
         self._tab_widgets[index] = widget
         self.tabs.blockSignals(True)
@@ -346,7 +373,7 @@ class WuwaQtWindow(QMainWindow):
 
     def _handle_main_tab_changed(self, index: int) -> None:
         current_widget = self.tabs.widget(index)
-        if isinstance(current_widget, ResonatorTab):
+        if _is_resonator_tab(current_widget):
             previous_index = self._active_main_index
             if previous_index is not None and previous_index != index:
                 previous_widget = self.tabs.widget(previous_index)
@@ -466,7 +493,7 @@ class WuwaQtWindow(QMainWindow):
             return
 
         current_widget = self.tabs.currentWidget()
-        if isinstance(current_widget, ResonatorTab):
+        if _is_resonator_tab(current_widget):
             current_id = current_widget.current_id
             self._set_sidebar_active(
                 f"{self._element_icon(CHARACTER_ELEMENTS.get(current_id))}   "
@@ -497,16 +524,14 @@ class WuwaQtWindow(QMainWindow):
 
     def open_character_tab(self) -> None:
         target = self._normalize_character_id(self.character_id_entry.text())
-        character_id = next((item for item in KNOWN_CHARACTER_IDS
-                             if self._normalize_character_id(item)
-                             == target), None)
+        character_id = resolve_character_id(target)
         if character_id is None:
             self.character_status.setText("ID inválida")
             return
 
         character_tab = self.character_tabs.get(character_id)
         if character_tab is None:
-            character_tab = ResonatorTab(initial_id=character_id)
+            character_tab = _resonator_tab_cls()(initial_id=character_id)
             self.character_tabs[character_id] = character_tab
             self.character_open_order.append(character_id)
             sources_index = self.tabs.count() - 1

@@ -114,22 +114,14 @@ class TethysCloseDialog(QMessageBox):
     @staticmethod
     def _fetch_icon_from_url(url: str) -> QPixmap | None:
         try:
-            from urllib.request import Request, urlopen
+            from wuwa_calculator.infrastructure.safe_http import fetch_image_bytes
 
-            request = Request(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                },
-            )
-            with urlopen(request, timeout=5) as response:
-                data = response.read()
-                pixmap = QPixmap()
-                if pixmap.loadFromData(data):
-                    return _circular_pixmap(pixmap)
-            return None
-        except OSError:
-            return None
+            pixmap = QPixmap()
+            if pixmap.loadFromData(fetch_image_bytes(url, timeout=5)):
+                return _circular_pixmap(pixmap)
+        except (OSError, ValueError):
+            pass
+        return None
 
     @staticmethod
     def confirm_close(

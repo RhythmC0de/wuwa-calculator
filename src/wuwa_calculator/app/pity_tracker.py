@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import parse_qs, urlsplit
-from urllib.request import Request, urlopen
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -44,11 +43,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.wuwa_calculator.app.security_policy import allows_remote_content
-from src.wuwa_calculator.ui.styles.styles import wallpaper_palette
+from wuwa_calculator.infrastructure.safe_http import post_json
+from wuwa_calculator.infrastructure.url_policy import allows_gacha_api, allows_remote_content
+from wuwa_calculator.ui.styles.styles import wallpaper_palette
 EVENT_RESONATOR_BANNER_URL = "https://i.imgur.com/JrRW9Bt.jpeg"
 SIGNATURE_WEAPON_BANNER_URL = "https://i.imgur.com/metoowt.jpeg"
 
@@ -77,19 +75,14 @@ class PityHistoryImportWorker(QObject):
         try:
             query = parse_qs(urlsplit(self.history_url).fragment.split("?", 1)[-1])
             params = {key: values[-1] for key, values in query.items() if values}
-            host = urlsplit(self.history_url).netloc
+            host = urlsplit(self.history_url).hostname or ""
             endpoint = f"https://{host}/aki/gacha/record/query"
+            if not allows_gacha_api(endpoint):
+                raise ValueError("Host do histórico não é um servidor oficial do jogo.")
             records: list[dict[str, object]] = []
             for page in range(1, 21):
                 body = {**params, "page": page, "size": 20}
-                request = Request(
-                    endpoint,
-                    data=json.dumps(body).encode("utf-8"),
-                    headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
-                    method="POST",
-                )
-                with urlopen(request, timeout=10) as response:  # nosec B310
-                    payload = json.loads(response.read().decode("utf-8"))
+                payload = post_json(endpoint, body, timeout=10, check=allows_gacha_api)
                 data = payload.get("data", payload) if isinstance(payload, dict) else {}
                 page_records = data.get("list", data.get("records", [])) if isinstance(data, dict) else []
                 if not isinstance(page_records, list) or not page_records:

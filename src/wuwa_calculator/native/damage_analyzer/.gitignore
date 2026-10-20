@@ -1,0 +1,7 @@
+build/
+out/
+*.pyd
+*.so
+*.o
+__pycache__/
+synthetic_test.avi

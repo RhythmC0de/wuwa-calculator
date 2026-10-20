@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.wuwa_calculator.storage.history_storage import (
+from wuwa_calculator.storage.history_storage import (
     ROTATION_HISTORY_FILE,
     export_rotation_history,
     import_rotation_history,
@@ -13,8 +13,8 @@ from src.wuwa_calculator.storage.history_storage import (
     load_rotation_teams,
     save_rotation_test,
 )
-from wuwa_calculator.app.wuwa_processing import DamageResult, calculate_damage
-from wuwa_calculator.app.wuwa_processing import ManualDamageResult, calculate_manual_damage
+from src.wuwa_calculator.domain.calculations.damage import DamageResult, calculate_damage
+from src.wuwa_calculator.domain.calculations.damage import ManualDamageResult, calculate_manual_damage
 
 
 @dataclass(frozen=True)

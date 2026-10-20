@@ -5,26 +5,22 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-ROTATION_HISTORY_FILE = DATA_DIR / "rotation_history.json"
+from wuwa_calculator.storage.atomic import read_json, write_json
+from wuwa_calculator.storage.paths import migrate_legacy_file, user_data_dir
+
+ROTATION_HISTORY_FILE = user_data_dir() / "rotation_history.json"
+MAX_IMPORT_RECORDS = 5000
 
 
 def read_json_file(path: Path, default: object) -> object:
-    try:
-        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else default
-    except (OSError, json.JSONDecodeError):
-        return default
+    return read_json(path, default)
 
 
 def write_json_file(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json(path, value)
 
 
 def empty_rotation_document() -> dict[str, object]:
@@ -32,6 +28,8 @@ def empty_rotation_document() -> dict[str, object]:
 
 
 def load_rotation_document(path: Path = ROTATION_HISTORY_FILE) -> dict[str, object]:
+    if path == ROTATION_HISTORY_FILE:
+        migrate_legacy_file("rotation_history.json", path)
     stored = read_json_file(path, None)
     document = empty_rotation_document()
     if isinstance(stored, list):
@@ -127,6 +125,8 @@ def import_rotation_history(
         candidates = []
     if not candidates or not all(isinstance(item, dict) for item in candidates):
         raise ValueError("O JSON não contém testes de rotação reconhecíveis.")
+    if len(candidates) > MAX_IMPORT_RECORDS:
+        raise ValueError(f"Arquivo com registros demais (máximo {MAX_IMPORT_RECORDS}).")
 
     destination_document = load_rotation_document(destination_path)
     history = [record for record in destination_document["rotations"] if isinstance(record, dict)]

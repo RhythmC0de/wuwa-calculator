@@ -1,6 +1,6 @@
 """Reusable PySide6 presentation components."""
 
-import builtins
+import logging
 import os
 import sys
 import math
@@ -8,8 +8,6 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PySide6.QtCore import Qt, QTimer, QByteArray, QRect, QRectF, QPropertyAnimation, QSequentialAnimationGroup, QEasingCurve
 from PySide6.QtGui import (
@@ -27,19 +25,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.wuwa_calculator.ui.styles.styles import CARD, apply_element_glow, apply_glow
-from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from wuwa_calculator.ui.styles.styles import CARD, apply_element_glow, apply_glow
+from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
 
 
-_print = builtins.print
-
-
-def _debug_print(*args: object, **kwargs: object) -> None:
-    if os.environ.get("TETHYS_DEBUG_BANNER") == "1":
-        _print(*args, **kwargs)
-
-
-print = _debug_print
+log = logging.getLogger(__name__)
+HOLOGRAM_INTERVAL_MS = 66  # ~15 fps: enough for the sheen, half the repaint cost of 50 ms
 
 
 ELEMENT_UI_COLORS = {
@@ -90,7 +81,7 @@ def _character_element(name: str, element: str | None) -> str:
 
 def _create_rounded_pixmap(pixmap: QPixmap, radius: int = 16) -> QPixmap:
     """Cria um pixmap com cantos arredondados (estilo parenteses ( )) com sombra 3D moderada."""
-    print(f"[_create_rounded_pixmap] Aplicando cantos ( ) com sombra 3D moderada")
+    log.debug(f"[_create_rounded_pixmap] Aplicando cantos ( ) com sombra 3D moderada")
     
     if pixmap.isNull():
         return pixmap
@@ -131,7 +122,7 @@ def _create_rounded_pixmap(pixmap: QPixmap, radius: int = 16) -> QPixmap:
     
     painter.end()
     
-    print(f"[_create_rounded_pixmap] Imagem 960x440 com cantos ( ) e sombra 3D criada")
+    log.debug(f"[_create_rounded_pixmap] Imagem 960x440 com cantos ( ) e sombra 3D criada")
     return result
 
 
@@ -204,7 +195,7 @@ class WuWaKuroBannerCard(QFrame):
                  banner_start: datetime | None = None, element: str | None = None,
                  parent=None):
         super().__init__(parent)
-        print(f"[WuWaKuroBannerCard] Inicializando com character_name={character_name}, image_bytes={len(image_bytes) if isinstance(image_bytes, bytes) else 'INVÁLIDO'} bytes")
+        log.debug(f"[WuWaKuroBannerCard] Inicializando com character_name={character_name}, image_bytes={len(image_bytes) if isinstance(image_bytes, bytes) else 'INVÁLIDO'} bytes")
         self.end_date = end_date
         self.banner_start = banner_start
         self.element = _character_element(character_name, element)
@@ -294,7 +285,7 @@ class WuWaKuroBannerCard(QFrame):
         # Timer para animar o holograma continuamente
         self.hologram_timer = QTimer(self)
         self.hologram_timer.timeout.connect(self._update_hologram)
-        self.hologram_timer.start(50)
+        self.hologram_timer.start(HOLOGRAM_INTERVAL_MS)
         
         self.load_image_from_bytes(image_bytes, character_name)
         
@@ -305,7 +296,7 @@ class WuWaKuroBannerCard(QFrame):
         self.timer.timeout.connect(self.refresh_realtime_clock)
         self.timer.start(1000)
         self.refresh_realtime_clock()
-        print(f"[WuWaKuroBannerCard] [OK] Inicializacao completa!")
+        log.debug(f"[WuWaKuroBannerCard] [OK] Inicializacao completa!")
 
     def _position_countdown(self) -> None:
         margin = 12
@@ -314,40 +305,40 @@ class WuWaKuroBannerCard(QFrame):
 
     def load_image_from_bytes(self, image_bytes: bytes, fallback_name: str):
         """Carrega imagem a partir de bytes já carregados em memória."""
-        print(f"[WuWaKuroBannerCard] load_image_from_bytes chamado com {len(image_bytes)} bytes")
+        log.debug(f"[WuWaKuroBannerCard] load_image_from_bytes chamado com {len(image_bytes)} bytes")
         try:
             if not image_bytes or len(image_bytes) == 0:
                 raise ValueError("image_bytes vazio")
             
-            print(f"[WuWaKuroBannerCard] Criando QPixmap...")
+            log.debug(f"[WuWaKuroBannerCard] Criando QPixmap...")
             pixmap = QPixmap()
             loaded = pixmap.loadFromData(QByteArray(image_bytes))
-            print(f"[WuWaKuroBannerCard] Pixmap.loadFromData retornou: {loaded}")
-            print(f"[WuWaKuroBannerCard] Pixmap isNull: {pixmap.isNull()}, size: {pixmap.size()}")
+            log.debug(f"[WuWaKuroBannerCard] Pixmap.loadFromData retornou: {loaded}")
+            log.debug(f"[WuWaKuroBannerCard] Pixmap isNull: {pixmap.isNull()}, size: {pixmap.size()}")
             
             if not pixmap.isNull():
                 # Redimensiona preservando TODO o conteúdo (sem cortar)
                 # Container: 960x440
                 # Estratégia: SEMPRE escala por ALTURA (440px) - nunca corta topo/bottom
                 # Se largura > 960, faz crop APENAS nas laterais
-                print(f"[WuWaKuroBannerCard] Escalando pixmap de {pixmap.size()} para altura 440px...")
+                log.debug(f"[WuWaKuroBannerCard] Escalando pixmap de {pixmap.size()} para altura 440px...")
                 
                 # Escala por altura mantendo proporção (preserva tudo vertical)
                 scaled_pixmap = pixmap.scaledToHeight(
                     440, 
                     Qt.SmoothTransformation
                 )
-                print(f"[WuWaKuroBannerCard] Após scaledToHeight(440): {scaled_pixmap.size()}")
+                log.debug(f"[WuWaKuroBannerCard] Após scaledToHeight(440): {scaled_pixmap.size()}")
                 
                 # Se largura > 960, faz crop APENAS nas laterais (centro)
                 if scaled_pixmap.width() > 960:
                     crop_x = (scaled_pixmap.width() - 960) // 2
-                    print(f"[WuWaKuroBannerCard] Cortando {crop_x}px de cada lado (esquerda/direita)...")
+                    log.debug(f"[WuWaKuroBannerCard] Cortando {crop_x}px de cada lado (esquerda/direita)...")
                     scaled_pixmap = scaled_pixmap.copy(crop_x, 0, 960, 440)
-                    print(f"[WuWaKuroBannerCard] Tamanho após crop: {scaled_pixmap.size()}")
+                    log.debug(f"[WuWaKuroBannerCard] Tamanho após crop: {scaled_pixmap.size()}")
                 else:
                     # Largura < 960: mantém aspecto correto, sem esticar
-                    print(f"[WuWaKuroBannerCard] Imagem cabe perfeitamente (largura {scaled_pixmap.width()} < 960)")
+                    log.debug(f"[WuWaKuroBannerCard] Imagem cabe perfeitamente (largura {scaled_pixmap.width()} < 960)")
 
                 self.banner_width = scaled_pixmap.width()
                 self.setFixedWidth(self.banner_width)
@@ -361,19 +352,19 @@ class WuWaKuroBannerCard(QFrame):
                 self._update_hologram()
                 
                 # Aplica cantos arredondados com sombra suave usando QPainterPath
-                print(f"[WuWaKuroBannerCard] Aplicando cantos arredondados estilo parentese )...")
+                log.debug(f"[WuWaKuroBannerCard] Aplicando cantos arredondados estilo parentese )...")
                 rounded_pixmap = _create_rounded_pixmap(scaled_pixmap, radius=16)
-                print(f"[WuWaKuroBannerCard] Pixmap pronto para exibição (960x440 com border-radius)...")
+                log.debug(f"[WuWaKuroBannerCard] Pixmap pronto para exibição (960x440 com border-radius)...")
                 self.img_label.setPixmap(rounded_pixmap)
-                print(f"[WuWaKuroBannerCard] Pixmap setado no label...")
+                log.debug(f"[WuWaKuroBannerCard] Pixmap setado no label...")
                 if self.img_label.pixmap():
-                    print(f"[WuWaKuroBannerCard] Label pixmap size: {self.img_label.pixmap().size()}")
+                    log.debug(f"[WuWaKuroBannerCard] Label pixmap size: {self.img_label.pixmap().size()}")
                 else:
-                    print(f"[WuWaKuroBannerCard] [ERROR] Label pixmap eh None!")
-                print(f"[WuWaKuroBannerCard] [OK] Imagem carregada com sucesso (SEM RECORTES)!")
+                    log.debug(f"[WuWaKuroBannerCard] [ERROR] Label pixmap eh None!")
+                log.debug(f"[WuWaKuroBannerCard] [OK] Imagem carregada com sucesso (SEM RECORTES)!")
                 return
         except Exception as e:
-            print(f"[WuWaKuroBannerCard] [ERROR] Falha ao carregar arte do banner: {e}")
+            log.debug(f"[WuWaKuroBannerCard] [ERROR] Falha ao carregar arte do banner: {e}")
             import traceback
             traceback.print_exc()
             
@@ -502,11 +493,19 @@ class WuWaKuroBannerCard(QFrame):
         self.countdown_label.setFixedHeight(40)
         self._position_countdown()
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.set_active(True)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        super().hideEvent(event)
+        self.set_active(False)
+
     def set_active(self, active: bool) -> None:
         """Pause visual effects while the Home tab is outside the viewport."""
         if active:
             if not self.hologram_timer.isActive():
-                self.hologram_timer.start(50)
+                self.hologram_timer.start(HOLOGRAM_INTERVAL_MS)
             if self.end_date > datetime.now(timezone.utc) and not self.timer.isActive():
                 self.timer.start(1000)
             return

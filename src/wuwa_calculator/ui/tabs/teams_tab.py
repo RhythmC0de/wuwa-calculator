@@ -7,8 +7,6 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PySide6.QtCore import QSize, Qt, QRectF, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
@@ -20,14 +18,14 @@ from PySide6.QtWidgets import (
 )
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel, apply_glow
-from src.wuwa_calculator.app.security_policy import allows_remote_content
-from src.wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
-from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
-from src.wuwa_calculator.data.echoes import ECHOES_DB
-from src.wuwa_calculator.data.element_images import CHARACTER_ELEMENT_IMAGE_URLS, ELEMENT_IMAGE_URLS
-from src.wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
-from src.wuwa_calculator.data.team_saved_images import TEAM_SAVED_IMAGE_URLS
-from src.wuwa_calculator.storage.team_storage import load_teams, save_teams
+from wuwa_calculator.app.security_policy import allows_remote_content
+from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
+from wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
+from wuwa_calculator.data.echoes import ECHOES_DB
+from wuwa_calculator.data.element_images import CHARACTER_ELEMENT_IMAGE_URLS, ELEMENT_IMAGE_URLS
+from wuwa_calculator.data.images import CHARACTER_IMAGE_FALLBACKS
+from wuwa_calculator.data.team_saved_images import TEAM_SAVED_IMAGE_URLS
+from wuwa_calculator.storage.team_storage import load_teams, save_teams
 
 SLOT_ROLES = ("Main DPS", "Suporte 1", "Suporte 2")
 

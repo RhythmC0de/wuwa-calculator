@@ -1,5 +1,6 @@
 """Localization utilities for handling UI text translation."""
 
+import functools
 import re
 
 
@@ -140,17 +141,29 @@ UI_TRANSLATIONS = {
 }
 
 
-def translate_ui_text(text: str, language: str) -> str:
-    """Translate UI labels while leaving character and weapon names untouched."""
+@functools.lru_cache(maxsize=1)
+def _ui_index() -> dict[str, str]:
+    """Qualquer variante (chave, PT-BR ou EN) -> chave canônica. Primeira vence."""
+    index: dict[str, str] = {}
     for key, portuguese in UI_TRANSLATIONS["PT-BR"].items():
         english = UI_TRANSLATIONS["EN"].get(key, key)
-        if text in (key, portuguese, english):
-            return UI_TRANSLATIONS[language].get(key, key)
-    return text
+        for variant in (key, portuguese, english):
+            index.setdefault(variant, key)
+    return index
 
 
-def translate_content_text(text: str, language: str) -> str:
-    """Translate manual kit titles and descriptions in both directions."""
+def translate_ui_text(text: str, language: str) -> str:
+    """Translate UI labels while leaving character and weapon names untouched."""
+    key = _ui_index().get(text)
+    table = UI_TRANSLATIONS.get(language)
+    if key is None or table is None:
+        return text
+    return table.get(key, key)
+
+
+@functools.lru_cache(maxsize=2)
+def _replacement_plan(language: str) -> tuple[tuple[re.Pattern[str] | None, str, str], ...]:
+    """Substituições ordenadas e regex pré-compilados (construído uma vez por idioma)."""
     if language == "EN":
         replacements = {
             "Golpe fallback": "Fallback Hit",
@@ -202,10 +215,19 @@ def translate_content_text(text: str, language: str) -> str:
             "effect": "efeito", "effects": "efeitos", "current state": "estado atual",
             "special attacks": "ataques especiais",
         }
-    translated = text
+    plan = []
     for source, target in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
-        if language == "PT-BR" and source.isalpha():
-            translated = re.sub(rf"\b{re.escape(source)}\b", target, translated)
-        else:
+        pattern = re.compile(rf"\b{re.escape(source)}\b") if language == "PT-BR" and source.isalpha() else None
+        plan.append((pattern, source, target))
+    return tuple(plan)
+
+
+def translate_content_text(text: str, language: str) -> str:
+    """Translate manual kit titles and descriptions in both directions."""
+    translated = text
+    for pattern, source, target in _replacement_plan(language):
+        if pattern is not None:
+            translated = pattern.sub(target, translated)
+        elif source in translated:
             translated = translated.replace(source, target)
     return translate_ui_text(translated, language)

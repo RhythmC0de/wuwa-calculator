@@ -8,7 +8,7 @@ from PySide6.QtCore import QSettings, QUrl, Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QWidget
 
-from src.wuwa_calculator.ui.styles.styles import (
+from wuwa_calculator.ui.styles.styles import (
     accent_preset,
     application_qss,
     refresh_glows,

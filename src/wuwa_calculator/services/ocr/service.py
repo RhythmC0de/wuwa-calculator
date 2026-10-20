@@ -3,26 +3,20 @@
 # em escala de cinza e com contraste/nitidez aumentados
 from __future__ import annotations
 
+import argparse
+import functools
+import json
+import logging
 import os
 import re
-import sys
-import json
 import unicodedata
-
 from pathlib import Path
 
-# Desativa o MKL-DNN por compatibilidade entre builds do PaddlePaddle.
-os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
-# PaddleOCR ainda inclui protos antigos incompatíveis com protobuf 4+.
-os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+from wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
+from wuwa_calculator.services.characters.identity import normalize_character_id, normalized_id_map
+from wuwa_calculator.services.image.image_processing import prepare_for_ocr
 
-from paddleocr import PaddleOCR
-project_root = Path(__file__).resolve().parents[1]
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from wuwa_calculator.services.image.image_processing import prepare_for_ocr  # pylint: disable=wrong-import-position
-from src.wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
+log = logging.getLogger(__name__)
 
 SEP = r"\s*[:=]?\s*"
 NUMBER = r"([\d.,]+)"
@@ -35,7 +29,27 @@ ELEMENTS = (
 
 ELEMENT_PATTERN = "|".join(ELEMENTS)
 
-ocr = PaddleOCR(lang="en")
+_engine = None
+
+
+def _require_ocr_engine():
+    """Cria o PaddleOCR sob demanda (import e modelos custam segundos/centenas de MB)."""
+    global _engine  # pylint: disable=global-statement
+    if _engine is not None:
+        return _engine
+    # Variáveis só são ajustadas quando o OCR é realmente usado, não no import.
+    os.environ.setdefault("PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT", "0")
+    os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+    try:
+        from paddleocr import PaddleOCR
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            "PaddleOCR não está instalado. Instale as dependências do projeto "
+            "com `pip install -r requirements.txt` e tente novamente."
+        ) from exc
+    _engine = PaddleOCR(lang="en")
+    return _engine
+
 
 STAT_PATTERNS: dict[str, re.Pattern[str]] = {
     "atk": re.compile(
@@ -110,21 +124,17 @@ def extract_text_from_paddle_result(result) -> str:
     return "\n".join(lines)
 
 
-def _normalise_character(value: str) -> str:
-    folded = "".join(
-        char for char in unicodedata.normalize("NFKD", value.casefold())
-        if not unicodedata.combining(char)
-    )
-    return re.sub(r"[^a-z0-9]+", "", folded)
+_normalise_character = normalize_character_id
+
+
+def _normalised_ids() -> dict[str, str]:
+    return normalized_id_map()
 
 
 def identify_character(text: str) -> str | None:
     """Identifica o personagem pelo nome lido no topo da build card."""
     candidates = text.splitlines()[:8]
-    normalised_ids = {
-        _normalise_character(character_id): character_id
-        for character_id in KNOWN_CHARACTER_IDS
-    }
+    normalised_ids = _normalised_ids()
     for candidate in candidates:
         normalised = _normalise_character(candidate)
         if normalised in normalised_ids:
@@ -144,10 +154,15 @@ def clean_number(raw: str | None) -> float | None:
     if raw is None:
         return None
     text = raw.strip().replace("%", "").replace(" ", "")
-    if text.count(",") == 1 and "." not in text:
-        text = text.replace(",", ".")
+    if "." in text and "," in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")  # 1.234,5
+        else:
+            text = text.replace(",", "")  # 1,234.5
+    elif "." not in text and re.fullmatch(r"\d+,\d{1,2}", text):
+        text = text.replace(",", ".")  # decimal: 12,5
     else:
-        text = text.replace(",", "")
+        text = text.replace(",", "")  # milhar: 1,234
     try:
         return float(text)
     except ValueError:
@@ -178,8 +193,8 @@ def extract_stats_from_image(path: str | Path) -> dict[str, float]:
 def extract_image_data(path: str | Path) -> tuple[dict[str, float], str | None]:
     """Imagem → texto, atributos reconhecidos e personagem identificado."""
     path = Path(path)
-    print("[Importação] Extraindo informações da imagem...")
-    result = ocr.predict(str(path))
+    engine = _require_ocr_engine()
+    result = engine.predict(str(path))
     text = extract_text_from_paddle_result(result)
     stats = extract_stats_from_text(text)
     if len(stats) < 3:
@@ -187,17 +202,23 @@ def extract_image_data(path: str | Path) -> tuple[dict[str, float], str | None]:
             import numpy as np
 
             prepared = prepare_for_ocr(path, width=1920)
-            enhanced_result = ocr.predict(np.asarray(prepared))
+            enhanced_result = engine.predict(np.asarray(prepared))
             enhanced_text = extract_text_from_paddle_result(enhanced_result)
             text = "\n".join(part for part in (text, enhanced_text) if part)
-        except (OSError, RuntimeError, ValueError):
-            pass
-    print(f"[Importação] Texto encontrado: {text}")
+        except (OSError, RuntimeError, ValueError) as exc:
+            log.debug("segunda passada de OCR falhou: %s", type(exc).__name__)
+    log.debug("OCR: %d linhas lidas", text.count("\n") + 1)
     return extract_stats_from_text(text), identify_character(text)
 
 
 if __name__ == "__main__":
-    from src.wuwa_calculator.app.main import select_image  # pylint: disable=import-outside-toplevel,no-name-in-module
-    img_prepared = prepare_for_ocr(select_image())
-    img_prepared.save("utils/ocr_output.png")
-    img_prepared.show()
+    parser = argparse.ArgumentParser(description="Extrai stats de uma build card via OCR.")
+    parser.add_argument("image", help="Caminho da imagem a processar.")
+    args = parser.parse_args()
+
+    try:
+        stats, detected_character = extract_image_data(args.image)
+        print(f"Personagem detectado: {detected_character}")
+        print(f"Stats: {stats}")
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc

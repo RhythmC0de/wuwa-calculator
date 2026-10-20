@@ -4,21 +4,29 @@ from __future__ import annotations
 
 import math
 import sys
+import traceback
 from collections import defaultdict
 from threading import Lock
 from typing import Any
 from pathlib import Path
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pyqtgraph as pg
 from PySide6.QtCore import QObject, QTime, QThread, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QTimeEdit, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QMessageBox, QPushButton, QTimeEdit, QVBoxLayout, QWidget,
 )
 
 from wuwa_calculator.ui.components.components import Card
+
+
+def _native_engine_module():
+    """Importa o localizador da engine (pacote ou execução direta)."""
+    try:
+        from . import native_engine
+    except ImportError:
+        import native_engine  # type: ignore[no-redef]
+    return native_engine
 
 
 ANALYSIS_BUCKET_SECONDS = 5.0
@@ -185,6 +193,12 @@ class CvDamageAnalysisWorker(QObject):
 
 
 class LiveDamageAnalysisWorker(QObject):
+    """Executa a engine C++ nativa e publica seus eventos para a interface.
+
+    A detecção, OCR, filtragem, rastreamento e deduplicação pertencem à engine.
+    Esta classe apenas adapta o resultado nativo aos sinais Qt já consumidos
+    pelo painel. O streaming incremental será adicionado na próxima etapa.
+    """
     damage_detected = Signal(dict)
     analysis_completed = Signal(dict)
     failed = Signal(str)
@@ -203,230 +217,106 @@ class LiveDamageAnalysisWorker(QObject):
         self.end_seconds = max(0.0, end_seconds)
         self.start_time = max(0.0, start_time if start_time is not None else skip_seconds)
         self._cancelled = False
-        self._position_lock = Lock()
-        self._target_seconds = self.start_time
-        self._frame_processing = False
-        self._idle_interval = 0.22
-        self._active_interval = 1.0 / OCR_SAMPLE_FPS
-        self.no_damage_timeout = INACTIVITY_TIMEOUT
+        self._cancel_token = None
 
     def update_position(self, seconds: float) -> None:
-        with self._position_lock:
-            if self._frame_processing:
-                return
-            # Mailbox de um único frame: posições intermediárias são descartadas.
-            self._target_seconds = max(0.0, float(seconds))
+        # Mantido por compatibilidade com o painel atual. A engine analisa o
+        # intervalo selecionado, sem depender da posição de reprodução.
+        return
 
     def cancel(self) -> None:
         self._cancelled = True
+        # A engine verifica o token a cada frame e devolve o resultado parcial.
+        # O token é por análise: cancelar esta não afeta uma análise nova.
+        token = self._cancel_token
+        if token is not None:
+            token.cancel()
+
+    @staticmethod
+    def _load_engine():
+        return _native_engine_module().load_engine()
+
+    @staticmethod
+    def _stat(result, name: str) -> int:
+        """Lê uma estatística da engine sem quebrar com builds mais antigas."""
+        return int(getattr(result, name, 0) or 0)
 
     def run(self) -> None:
-        import cv2
-        from rapidocr_onnxruntime import RapidOCR
-
-        capture = cv2.VideoCapture(self.video_path, cv2.CAP_FFMPEG)
         try:
-            if not capture.isOpened():
-                self.failed.emit("Não foi possível abrir o vídeo para análise ao vivo")
+            if self._cancelled:
                 return
-            cv2.setNumThreads(1)
-            ocr = RapidOCR()
-            fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            duration = frame_count / fps if frame_count else 0.0
-            capture.set(cv2.CAP_PROP_POS_MSEC, self.start_time * 1000.0)
-            initial_success, _initial_frame = capture.read()
-            if not initial_success:
-                self.failed.emit("Não foi possível posicionar o vídeo no início da análise")
+
+            engine = self._load_engine()
+            config = engine.AnalyzerConfig()
+            config.verbose = False
+            self._cancel_token = engine.CancelToken()
+            config.cancel_token = self._cancel_token
+            if self._cancelled:
                 return
-            recent: dict[tuple[int, int, int], float] = {}
-            warmup_observations: set[tuple[int, int, int]] = set()
-            warmup_started: float | None = None
-            learned_profile: tuple[float, float, float] | None = None
-            combat_confirmed = False
-            last_position = -1.0
-            accumulated = 0.0
-            last_detection_time = -1.0
-            # O timeout ignora todo o vídeo anterior ao início efetivo da análise.
-            last_hit_time = self.start_time
-            no_damage_timer = 0.0
-            completion_reason = "video_end"
-            while not self._cancelled:
-                with self._position_lock:
-                    target = self._target_seconds
-                startup_window = self.start_time <= target < self.start_time + 2.0
-                interval = 0.0 if startup_window else (
-                    self._active_interval
-                    if last_detection_time >= 0 and target - last_detection_time < 1.5
-                    else self._idle_interval
-                )
-                if target < self.skip_seconds or abs(target - last_position) < interval:
-                    QThread.msleep(45)
-                    continue
-                if duration:
-                    target = min(target, duration)
-                no_damage_timer = max(0.0, target - last_hit_time) if last_hit_time >= 0 else 0.0
-                if self.end_seconds and target >= self.end_seconds:
-                    completion_reason = "manual_limit"
-                    break
-                analysis_elapsed = max(0.0, target - self.start_time)
-                if (
-                    not self.end_seconds
-                    and analysis_elapsed >= MIN_INACTIVITY_ANALYSIS_SECONDS
-                    and no_damage_timer >= self.no_damage_timeout
-                ):
-                    completion_reason = "inactivity"
-                    break
-                capture.set(cv2.CAP_PROP_POS_MSEC, target * 1000.0)
-                success, frame = capture.read()
-                if not success:
-                    QThread.msleep(70)
-                    continue
-                if not self._is_game_screen(frame):
-                    last_position = target
-                    QThread.msleep(45)
-                    continue
-                with self._position_lock:
-                    self._frame_processing = True
-                try:
-                    values = self._read_values(frame, ocr)
-                finally:
-                    with self._position_lock:
-                        self._frame_processing = False
-                fresh_values = []
-                for value, center_x, center_y, item_width, item_height, color_score in values:
-                    if combat_confirmed and learned_profile is not None:
-                        learned_width, learned_height, learned_color = learned_profile
-                        size_match = (
-                            learned_width * 0.45 <= item_width <= learned_width * 2.2
-                            and learned_height * 0.45 <= item_height <= learned_height * 2.2
-                        )
-                        if not size_match or color_score < learned_color * 0.35:
-                            continue
-                    signature = (value, center_x // 50, center_y // 30)
-                    previous = recent.get(signature)
-                    if previous is not None and target - previous < 0.65:
-                        continue
-                    recent[signature] = target
-                    if len(recent) > 2048:
-                        cutoff = target - 4.0
-                        recent = {
-                            key: seen_at
-                            for key, seen_at in recent.items()
-                            if seen_at >= cutoff
-                        }
-                    fresh_values.append(value)
-                    if not combat_confirmed:
-                        warmup_observations.add(signature)
-                        warmup_started = target if warmup_started is None else warmup_started
-                if not combat_confirmed:
-                    if len(warmup_observations) < 2 or warmup_started is None or target - warmup_started < 0.25:
-                        last_position = target
-                        QThread.msleep(45)
-                        continue
-                    combat_confirmed = True
-                    learned_values = [item for item in values if (item[0], item[1] // 50, item[2] // 30) in warmup_observations]
-                    if learned_values:
-                        learned_profile = (
-                            sum(item[3] for item in learned_values) / len(learned_values),
-                            sum(item[4] for item in learned_values) / len(learned_values),
-                            sum(item[5] for item in learned_values) / len(learned_values),
-                        )
-                damage = float(sum(fresh_values))
-                accumulated += damage
-                if fresh_values:
-                    last_detection_time = target
-                    last_hit_time = target
-                    no_damage_timer = 0.0
+
+            # A engine começa em skip_seconds (= maior entre "Ignorar vinheta"
+            # e "Início da análise"). start_time é só a origem do gráfico.
+            scan_start = max(self.skip_seconds, self.start_time)
+
+            result = engine.analyze_video(
+                self.video_path,
+                scan_start,
+                self.end_seconds if self.end_seconds > scan_start else -1.0,
+                config,
+            )
+
+            if self._cancelled or getattr(result, "cancelled", False):
+                return
+
+            # Publica somente eventos produzidos pela engine; não faz OCR,
+            # deduplicação ou estimativa de dano no Python.
+            events = sorted(result.events, key=lambda event: float(event.timestamp))
+            for event in events:
+                if self._cancelled:
+                    return
+                damage = float(event.damage)
                 self.damage_detected.emit({
-                    "timestamp": target,
+                    "timestamp": float(event.timestamp),
                     "damage": damage,
-                    "hits": len(fresh_values),
-                    "peak": max(fresh_values, default=0),
-                    "accumulated": accumulated,
+                    "hits": 1,
+                    "peak": damage,
+                    "accumulated": 0.0,
                 })
-                last_position = target
-                QThread.msleep(45)
-        except (OSError, RuntimeError, ValueError) as error:
-            self.failed.emit(f"Falha durante análise ao vivo: {error}")
+
+            self.analysis_completed.emit({
+                "reason": "native_complete",
+                "last_hit": max(
+                    (float(event.timestamp) for event in events),
+                    default=-1.0,
+                ),
+                "total_damage": float(result.total_damage),
+                "total_hits": int(result.total_hits),
+                "peak_damage": float(result.peak_damage),
+                "duration": float(result.duration),
+                "frames_read": self._stat(result, "frames_read"),
+                "frames_analyzed": self._stat(result, "frames_analyzed"),
+                "candidates_detected": self._stat(result, "candidates_detected"),
+                "candidates_rejected_hud": self._stat(result, "candidates_rejected_hud"),
+                "candidates_rejected_geometry": self._stat(result, "candidates_rejected_geometry"),
+                "candidates_passed_filters": self._stat(result, "candidates_passed_filters"),
+                "ocr_calls": self._stat(result, "ocr_calls"),
+                "ocr_no_numeric_result": self._stat(result, "ocr_no_numeric_result"),
+                "ocr_rejected_confidence": self._stat(result, "ocr_rejected_confidence"),
+                "ocr_ignored_countdown": self._stat(result, "ocr_ignored_countdown"),
+                "ocr_below_min_damage": self._stat(result, "ocr_below_min_damage"),
+            })
+        except Exception as error:
+            # Report unexpected pybind11/API errors too; otherwise the QThread can
+            # end without a useful message and the UI appears to do nothing.
+            details = traceback.format_exc()
+            self.failed.emit(
+                f"Falha na engine nativa ({type(error).__name__}): {error}\n\n{details}"
+            )
         finally:
-            capture.release()
-            if not self._cancelled:
-                self.analysis_completed.emit({
-                    "reason": completion_reason,
-                    "last_hit": last_hit_time,
-                })
+            # Sempre emite: o QThread só encerra seu loop de eventos por este
+            # sinal. Cada worker está ligado ao seu próprio thread (veja
+            # _start_live_analysis), então um worker cancelado não afeta o novo.
             self.finished.emit()
-
-    @staticmethod
-    def _is_game_screen(frame) -> bool:
-        import cv2
-
-        height, width = frame.shape[:2]
-        scene = frame[int(height * 0.16):int(height * 0.62), int(width * 0.24):int(width * 0.76)]
-        hsv = cv2.cvtColor(scene, cv2.COLOR_BGR2HSV)
-        mean_value = float(hsv[:, :, 2].mean())
-        saturated_ratio = float((hsv[:, :, 1] > 45).mean())
-        dark_ratio = float((hsv[:, :, 2] < 85).mean())
-        return mean_value < 232.0 and (saturated_ratio > 0.025 or dark_ratio > 0.12)
-
-    @staticmethod
-    def _read_values(frame, ocr: Any) -> list[tuple[int, int, int, int, int, float]]:
-        import cv2
-
-        height, width = frame.shape[:2]
-        roi_top = int(height * 0.16)
-        roi_bottom = int(height * 0.62)
-        roi_left = int(width * 0.24)
-        roi_right = int(width * 0.76)
-        crop = frame[roi_top:roi_bottom, roi_left:roi_right]
-        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        bright_mask = cv2.inRange(hsv, (0, 0, 175), (180, 145, 255))
-        warm_mask = cv2.inRange(hsv, (5, 55, 120), (45, 255, 255))
-        candidate_mask = cv2.bitwise_or(bright_mask, warm_mask)
-        candidate_mask = cv2.morphologyEx(
-            candidate_mask,
-            cv2.MORPH_OPEN,
-            cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2)),
-        )
-        contours, _ = cv2.findContours(candidate_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not any(cv2.contourArea(contour) >= 12 for contour in contours):
-            return []
-        enlarged = cv2.resize(crop, None, fx=1.15, fy=1.15, interpolation=cv2.INTER_LINEAR)
-        result, _ = ocr(enlarged)
-        values = []
-        for item in result or []:
-            if len(item) < 3:
-                continue
-            box, text, confidence = item
-            digits = "".join(character for character in str(text) if character.isdigit())
-            if not digits or len(digits) > 8 or float(confidence) < 0.35:
-                continue
-            value = int(digits)
-            if value < 100 or value > 100_000:
-                continue
-            points = [(point[0] / 1.15, point[1] / 1.15) for point in box]
-            left = max(0, int(min(point[0] for point in points)))
-            top = max(0, int(min(point[1] for point in points)))
-            right = min(crop.shape[1], int(max(point[0] for point in points)) + 1)
-            bottom = min(crop.shape[0], int(max(point[1] for point in points)) + 1)
-            patch = crop[top:bottom, left:right]
-            if patch.size == 0:
-                continue
-            patch_hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
-            bright_ratio = float((patch_hsv[:, :, 2] > 170).mean())
-            color_ratio = float(((patch_hsv[:, :, 1] > 55) & (patch_hsv[:, :, 2] > 120)).mean())
-            surrounding = crop[max(0, top - 8):min(crop.shape[0], bottom + 8), max(0, left - 8):min(crop.shape[1], right + 8)]
-            surrounding_hsv = cv2.cvtColor(surrounding, cv2.COLOR_BGR2HSV)
-            if float(surrounding_hsv[:, :, 2].mean()) > 238 and color_ratio < 0.08:
-                continue
-            color_score = max(color_ratio, bright_ratio * 0.35)
-            if color_score < 0.12:
-                continue
-            center_x = int(sum(point[0] for point in points) / len(points) + roi_left)
-            center_y = int(sum(point[1] for point in points) / len(points) + roi_top)
-            values.append((value, center_x, center_y, max(1, right - left), max(1, bottom - top), color_score))
-        return values
 
 
 class DpsSimulationPanel(Card):
@@ -474,7 +364,10 @@ class DpsSimulationPanel(Card):
             legend.hide()
         self.analysis_status = QLabel("Aguardando números reais")
         self.analysis_status.setObjectName("dpsAnalysisStatus")
-        header.addWidget(self.analysis_status)
+        self.analysis_status.setWordWrap(True)
+        self.analysis_status.setMinimumWidth(240)
+        self.analysis_status.setToolTip("Status e diagnósticos da análise nativa")
+        header.addWidget(self.analysis_status, 1)
         self.hit_label = QLabel("Hits: 0")
         self.hit_label.setObjectName("dpsCursorLabel")
         header.addWidget(self.hit_label)
@@ -815,35 +708,79 @@ class DpsSimulationPanel(Card):
         self.peak_metric.setText("Maior hit: --")
         self.hit_label.setText("Hits: 0")
         self.analysis_status.setText(
-            f"Aguardando números reais a partir de {self._analysis_start_seconds():.0f}s..."
+            "Analisando o vídeo com a engine C++... pode levar alguns minutos "
+            "(cerca de 2,5× a duração do vídeo em 1440p/60fps). "
+            "Os números aparecem quando terminar."
         )
         self.analyze_button.setText("Parar análise")
-        self.live_thread = QThread(self)
-        self.live_worker = LiveDamageAnalysisWorker(
+        thread = QThread(self)
+        worker = LiveDamageAnalysisWorker(
             video_path,
             self._scan_start_seconds(),
             self._analysis_end_seconds(),
             self._analysis_start_seconds(),
         )
-        self.live_worker.moveToThread(self.live_thread)
-        self.live_thread.started.connect(self.live_worker.run)
-        self.live_worker.damage_detected.connect(self._on_live_damage)
-        self.live_worker.analysis_completed.connect(self._on_analysis_completed)
-        self.live_worker.failed.connect(self._on_live_failed)
-        self.live_worker.finished.connect(self._on_live_finished)
-        self.live_thread.finished.connect(self._on_live_thread_finished)
-        self.live_thread.start()
-        self.live_thread.setPriority(QThread.Priority.LowPriority)
+        self.live_thread = thread
+        self.live_worker = worker
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.damage_detected.connect(self._on_live_damage)
+        worker.analysis_completed.connect(self._on_analysis_completed)
+        worker.failed.connect(self._on_live_failed)
+        # Cada worker encerra o SEU thread; assim um worker antigo (cancelado)
+        # nunca derruba o thread da análise seguinte.
+        worker.finished.connect(thread.quit)
+        thread.finished.connect(
+            lambda t=thread, w=worker: self._on_live_thread_finished(t, w)
+        )
+        thread.start()
+        thread.setPriority(QThread.Priority.LowPriority)
 
     def _on_analysis_completed(self, data: dict) -> None:
         last_hit = float(data.get("last_hit", -1.0))
-        if last_hit < 0:
-            last_hit = self._pending_position_ms / 1000.0
-        self.cutoff_line.setValue(last_hit)
-        self.cutoff_line.show()
-        self.analysis_status.setText(
-            f"Concluída (Último hit em {self._clock_seconds(last_hit)})"
-        )
+        native_hits = int(data.get("total_hits", self._total_hits) or 0)
+        native_damage = float(data.get("total_damage", self._observed_damage) or 0.0)
+        native_peak = float(data.get("peak_damage", self._peak_hit) or 0.0)
+
+        if last_hit >= 0:
+            self.cutoff_line.setValue(last_hit)
+            self.cutoff_line.show()
+
+        # Use the engine's authoritative totals even when it returned no events.
+        # Previously, the metric labels were only updated by _render_live_blocks(),
+        # which returns immediately when _live_blocks is empty.
+        self.damage_metric.setText(f"Dano acumulado: {native_damage:,.0f}")
+        self.hits_metric.setText(f"Hits: {native_hits}")
+        self.peak_metric.setText(f"Maior hit: {native_peak:,.0f}")
+
+        duration = float(data.get("duration", 0.0) or 0.0)
+        elapsed = max(0.0, last_hit - self._dps_start_time) if last_hit >= 0 else 0.0
+        if elapsed <= 0:
+            elapsed = max(0.0, duration - self._dps_start_time)
+        average_dps = native_damage / elapsed if elapsed > 0 else 0.0
+        self.dps_metric.setText(f"DPS médio: {average_dps:,.0f}")
+
+        if native_hits > 0:
+            self.analysis_status.setText(
+                f"Engine C++ concluída · {native_hits} hits · "
+                f"{native_damage:,.0f} de dano · último hit "
+                f"{self._clock_seconds(last_hit) if last_hit >= 0 else '--:--'}"
+            )
+        else:
+            self.analysis_status.setText(
+                "Análise concluída, mas a engine não reconheceu nenhum hit. "
+                f"Frames: {data.get('frames_analyzed', 0)} · "
+                f"Candidatos: {data.get('candidates_detected', 0)} · "
+                f"Rejeitados (HUD): {data.get('candidates_rejected_hud', 0)} · "
+                f"Rejeitados (formato): {data.get('candidates_rejected_geometry', 0)} · "
+                f"Passaram filtros: {data.get('candidates_passed_filters', 0)} · "
+                f"Chamadas OCR: {data.get('ocr_calls', 0)} · "
+                f"OCR sem número: {data.get('ocr_no_numeric_result', 0)} · "
+                f"Confiança rejeitada: {data.get('ocr_rejected_confidence', 0)} · "
+                f"Contagem regressiva ignorada: {data.get('ocr_ignored_countdown', 0)} · "
+                f"Abaixo do dano mínimo: {data.get('ocr_below_min_damage', 0)}"
+            )
+
         self._plot_dirty = True
         if not self._plot_update_timer.isActive():
             self._plot_update_timer.start()
@@ -887,22 +824,37 @@ class DpsSimulationPanel(Card):
         return f"{total // 60}:{total % 60:02d}"
 
     def _on_live_failed(self, message: str) -> None:
-        self.analysis_status.setText(message)
-        self._stop_live_analysis()
-
-    def _on_live_finished(self) -> None:
-        if self.live_thread is not None:
-            self.live_thread.quit()
-
-    def _on_live_thread_finished(self) -> None:
-        if self.live_worker is not None:
-            self.live_worker.deleteLater()
-        thread = self.live_thread
-        self.live_worker = None
-        self.live_thread = None
+        # Do not call _stop_live_analysis() here: it overwrites this error with
+        # "Análise ao vivo parada", hiding the actual cause from the user.
+        self.analysis_status.setText("Falha na análise nativa. Veja os detalhes.")
+        self.analysis_status.setToolTip(message)
         self.analyze_button.setText("Análise ao vivo")
-        if thread is not None:
-            thread.deleteLater()
+        QMessageBox.critical(
+            self,
+            "Falha na análise de dano",
+            message,
+        )
+
+    def _on_live_thread_finished(
+        self, thread: QThread, worker: LiveDamageAnalysisWorker
+    ) -> None:
+        worker.deleteLater()
+        thread.deleteLater()
+        # Só limpa o estado se este ainda for o thread atual; um thread antigo
+        # terminando não pode apagar a análise que acabou de começar.
+        if self.live_thread is thread:
+            self.live_worker = None
+            self.live_thread = None
+            self.analyze_button.setText("Análise ao vivo")
+
+    def shutdown_analysis(self) -> None:
+        """Cancela a engine e espera o thread terminar (chamado ao fechar a janela)."""
+        thread = self.live_thread
+        if self.live_worker is not None:
+            self.live_worker.cancel()
+        if thread is not None and thread.isRunning():
+            thread.quit()
+            thread.wait(15000)
 
     def _stop_live_analysis(self) -> None:
         if self.live_worker is not None:

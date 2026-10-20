@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import builtins
+import logging
 import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PySide6.QtCore import QByteArray, QObject, QEvent, QThread, QTimer, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -31,19 +29,12 @@ from PySide6.QtWidgets import (
 from wuwa_calculator.ui.components.components import Card, TitleLabel, WuWaKuroBannerCard
 from wuwa_calculator.app.banner_service import fetch_current_banner
 from wuwa_calculator.app.pity_tracker import PityTrackerWidget
-from src.wuwa_calculator.ui.styles.styles import apply_glow
-from src.wuwa_calculator.storage.banner_cache import load_cached_banner, save_cached_banner
+from wuwa_calculator.ui.styles.styles import apply_glow
+from wuwa_calculator.storage.banner_cache import load_cached_banner, save_cached_banner
 
 
-_print = builtins.print
-
-
-def _debug_print(*args: object, **kwargs: object) -> None:
-    if os.environ.get("TETHYS_DEBUG_BANNER") == "1":
-        _print(*args, **kwargs)
-
-
-print = _debug_print
+log = logging.getLogger(__name__)
+HOLOGRAM_INTERVAL_MS = 66
 
 
 def _rounded_banner_pixmap(source: QPixmap, width: int, height: int, radius: int = 12) -> QPixmap:
@@ -119,11 +110,11 @@ class BannerWorker(QObject):
     finished = Signal(object)
 
     def run(self) -> None:
-        print("[BannerWorker] Iniciando trabalho...")
+        log.debug("[BannerWorker] Iniciando trabalho...")
         result = fetch_current_banner()
         if isinstance(result, dict):
             save_cached_banner(result)
-        print(f"[BannerWorker] Resultado: {type(result)} - {result if not isinstance(result, dict) else 'dict com dados'}")
+        log.debug(f"[BannerWorker] Resultado: {type(result)} - {result if not isinstance(result, dict) else 'dict com dados'}")
         self.finished.emit(result)
 
 
@@ -207,7 +198,7 @@ class UpcomingBannerCard(QFrame):
         self._update_hologram()
         self.hologram_timer = QTimer(self)
         self.hologram_timer.timeout.connect(self._update_hologram)
-        self.hologram_timer.start(50)
+        self.hologram_timer.start(HOLOGRAM_INTERVAL_MS)
         self.hologram_overlay.raise_()
 
         self.hover_frame = QFrame(self)
@@ -237,6 +228,15 @@ class UpcomingBannerCard(QFrame):
                 Qt.MaskMode.MaskInColor,
             )
         )
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if not self.hologram_timer.isActive():
+            self.hologram_timer.start(HOLOGRAM_INTERVAL_MS)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        super().hideEvent(event)
+        self.hologram_timer.stop()
 
     def _update_hologram(self) -> None:
         width, height = self.width(), self.height()
@@ -436,7 +436,7 @@ class HomeTab(QWidget):
         
         # Se já tem banner pré-carregado, mostra imediatamente
         if initial_banner:
-            print("[HomeTab] Banner pré-carregado recebido, criando card imediatamente...")
+            log.debug("[HomeTab] Banner pré-carregado recebido, criando card imediatamente...")
             self._banner_loaded(initial_banner)
             QTimer.singleShot(0, self._start_banner_refresh)
         else:
@@ -518,7 +518,7 @@ class HomeTab(QWidget):
         self.catalog_thread = None
 
     def _start_banner_refresh(self) -> None:
-        print("[HomeTab] Iniciando refresh de banner...")
+        log.debug("[HomeTab] Iniciando refresh de banner...")
         self.banner_thread = QThread(self)
         self.banner_worker = BannerWorker()
         self.banner_worker.moveToThread(self.banner_thread)
@@ -527,13 +527,13 @@ class HomeTab(QWidget):
         self.banner_worker.finished.connect(self.banner_thread.quit)
         self.banner_thread.finished.connect(self._clear_banner_worker)
         self.banner_thread.start()
-        print("[HomeTab] Thread de banner iniciada")
+        log.debug("[HomeTab] Thread de banner iniciada")
 
     def _banner_loaded(self, data: object) -> None:
-        print(f"[HomeTab] _banner_loaded chamado. data type: {type(data)}")
+        log.debug(f"[HomeTab] _banner_loaded chamado. data type: {type(data)}")
         
         if not isinstance(data, dict):
-            print("[HomeTab] Banner data não é dict, mantendo placeholder")
+            log.debug("[HomeTab] Banner data não é dict, mantendo placeholder")
             return
         
         self.banner_data = data
@@ -541,19 +541,19 @@ class HomeTab(QWidget):
         image_bytes = data.get('image_bytes', b'')
         ends_at_str = str(data.get('ends_at', ''))
         
-        print(f"[HomeTab] character_name: {character_name}")
-        print(f"[HomeTab] image_bytes length: {len(image_bytes) if isinstance(image_bytes, bytes) else 'NÃO É BYTES'}")
-        print(f"[HomeTab] ends_at_str: {ends_at_str}")
+        log.debug(f"[HomeTab] character_name: {character_name}")
+        log.debug(f"[HomeTab] image_bytes length: {len(image_bytes) if isinstance(image_bytes, bytes) else 'NÃO É BYTES'}")
+        log.debug(f"[HomeTab] ends_at_str: {ends_at_str}")
         
         if not isinstance(image_bytes, bytes) or len(image_bytes) == 0:
-            print("[HomeTab] image_bytes vazio, retornando")
+            log.debug("[HomeTab] image_bytes vazio, retornando")
             return
         
         try:
             ends_at = datetime.fromisoformat(ends_at_str)
-            print(f"[HomeTab] ends_at parseado: {ends_at}")
+            log.debug(f"[HomeTab] ends_at parseado: {ends_at}")
         except (ValueError, TypeError) as e:
-            print(f"[HomeTab] Erro ao parsear data: {e}")
+            log.debug(f"[HomeTab] Erro ao parsear data: {e}")
             return
 
         starts_at = self._parse_catalog_date(data.get("starts_at"))
@@ -561,7 +561,7 @@ class HomeTab(QWidget):
             starts_at = datetime(2026, 9, 10, 10, tzinfo=timezone.utc)
         
         # Remove o placeholder e cria o novo banner card
-        print("[HomeTab] Removendo placeholder...")
+        log.debug("[HomeTab] Removendo placeholder...")
         if self.banner_placeholder and self.banner_placeholder.parent():
             self.banner_container.removeWidget(self.banner_placeholder)
             self.banner_placeholder.deleteLater()
@@ -572,7 +572,7 @@ class HomeTab(QWidget):
             self.banner_card.deleteLater()
             self.banner_card = None
         
-        print("[HomeTab] Criando WuWaKuroBannerCard...")
+        log.debug("[HomeTab] Criando WuWaKuroBannerCard...")
         self.banner_card = WuWaKuroBannerCard(
             character_name=character_name,
             image_bytes=image_bytes,
@@ -581,14 +581,14 @@ class HomeTab(QWidget):
             element=str(data.get("element", "")) or None,
         )
         self.banner_container.insertWidget(1, self.banner_card)
-        print("[HomeTab] Banner card criado e inserido no layout")
+        log.debug("[HomeTab] Banner card criado e inserido no layout")
 
     def _clear_banner_worker(self) -> None:
-        print("[HomeTab] Limpando banner worker...")
+        log.debug("[HomeTab] Limpando banner worker...")
         if self.banner_worker is not None:
             self.banner_worker.deleteLater()
         if self.banner_thread is not None:
             self.banner_thread.deleteLater()
         self.banner_worker = None
         self.banner_thread = None
-        print("[HomeTab] Banner worker limpo")
+        log.debug("[HomeTab] Banner worker limpo")

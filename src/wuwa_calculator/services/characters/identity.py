@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 
@@ -16,13 +17,11 @@ def normalize_character_id(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", folded)
 
 
+@functools.lru_cache(maxsize=1)
+def normalized_id_map() -> dict[str, str]:
+    """normalized -> canonical id (built once; the catalog is static)."""
+    return {normalize_character_id(item): item for item in sorted(KNOWN_CHARACTER_IDS)}
+
+
 def resolve_character_id(value: str) -> str | None:
-    target = normalize_character_id(value)
-    return next(
-        (
-            item
-            for item in KNOWN_CHARACTER_IDS
-            if normalize_character_id(item) == target
-        ),
-        None,
-    )
+    return normalized_id_map().get(normalize_character_id(value))

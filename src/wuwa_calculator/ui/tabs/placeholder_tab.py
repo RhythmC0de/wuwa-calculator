@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.wuwa_calculator.ui.components.components import Card, TitleLabel
+from wuwa_calculator.ui.components.components import Card, TitleLabel
 
 
 class PlaceholderTab(QWidget):

@@ -1,218 +1,50 @@
-"""Integração com WuwaTracker para dados de banners atualizados - Multi-source strategy."""
+"""WuwaTracker banner catalog (public banner-history page) with safe HTTP."""
 
-import builtins
-import json
-import os
+from __future__ import annotations
+
+import logging
 import re
-from datetime import datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urljoin
-from urllib.request import Request, urlopen
+
+from wuwa_calculator.infrastructure.safe_http import fetch_image_bytes, fetch_text
+from wuwa_calculator.infrastructure.url_policy import allows_remote_content
+
+log = logging.getLogger(__name__)
+
+PAGE_URL = "https://wuwatracker.com/pt/banner-history"
+FALLBACK_IMAGE_URL = "https://i.imgur.com/JrRW9Bt.jpeg"
+QINGXIAO_IMAGE_URL = "https://i.imgur.com/lq6O5Vo.jpeg"  # page icon is missing; pinned override
+MAX_CATALOG_ITEMS = 200
+
+# Bounded character classes (no nested ".*?" spanning the whole page) to avoid
+# pathological backtracking on a hostile or malformed response.
+_PATTERN = re.compile(
+    r'"character":\{"name":"(?P<name>[^"]{1,80})",'
+    r'"iconSrc":"(?P<icon>[^"]{1,300})".{0,2000}?'
+    r'"firstStartDate":"(?P<start>[^"]{1,40})"'
+)
 
 
-_print = builtins.print
-
-
-def _debug_print(*args: object, **kwargs: object) -> None:
-    if os.environ.get("TETHYS_DEBUG_BANNER") == "1":
-        _print(*args, **kwargs)
-
-
-print = _debug_print
-
-
-def fetch_current_banner_cascading() -> dict[str, Any] | None:
-    """
-    Estratégia de cascata: tenta WuwaTracker → Gist → Jingyuan padrão.
-    Retorna um dicionário com:
-    {
-        'name': str (nome do personagem),
-        'image_bytes': bytes (imagem já baixada),
-        'ends_at': str (data de término em ISO format),
-        'source': str ('wuwatracker', 'gist', ou 'fallback')
-    }
-    """
-    print("[Banner Cascade] Iniciando estratégia de cascata de fontes...")
-    
-    # Passo 1: Tenta WuwaTracker
-    print("\n[Banner Cascade] 1️⃣ Tentando WuwaTracker...")
-    banner = _try_wuwatracker()
-    if banner:
-        print(f"[Banner Cascade] ✅ Sucesso: WuwaTracker ({banner.get('name')})")
-        return banner
-    
-    # Passo 2: Tenta Gist (fallback confiável)
-    print("\n[Banner Cascade] 2️⃣ Tentando Gist (fallback confiável)...")
-    banner = _try_gist()
-    if banner:
-        print(f"[Banner Cascade] ✅ Sucesso: Gist ({banner.get('name')})")
-        return banner
-    
-    # Passo 3: Carrega Jingyuan padrão (último resort)
-    print("\n[Banner Cascade] 3️⃣ Carregando Jingyuan padrão (último resort)...")
-    banner = _try_jingyuan_fallback()
-    if banner:
-        print(f"[Banner Cascade] ✅ Sucesso: Jingyuan padrão")
-        return banner
-    
-    print("[Banner Cascade] ❌ Todas as fontes falharam!")
-    return None
-
-
-def _try_wuwatracker() -> dict[str, Any] | None:
-    """Tenta WuwaTracker - endpoints experimentais."""
-    urls_to_try = [
-        "https://wuwatracker.com/api/banners",
-        "https://api.wuwatracker.com/banners",
-        "https://wuwatracker.com/api/v1/banners",
-    ]
-    
-    for url in urls_to_try:
-        try:
-            print(f"  [WuwaTracker] GET {url}...")
-            request = Request(
-                url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "application/json",
-                },
-            )
-            with urlopen(request, timeout=5) as response:
-                data = json.loads(response.read().decode('utf-8'))
-                print(f"  [WuwaTracker] ✓ API respondeu com sucesso!")
-                
-                banner = _parse_tracker_response(data)
-                if banner and banner.get("image_url"):
-                    # Download a imagem
-                    try:
-                        image_bytes = _download_image(banner["image_url"])
-                        banner["image_bytes"] = image_bytes
-                        banner["source"] = "wuwatracker"
-                        return banner
-                    except Exception as e:
-                        print(f"  [WuwaTracker] ✗ Erro ao baixar imagem: {e}")
-                        continue
-        except Exception as e:
-            print(f"  [WuwaTracker] ✗ {url} falhou: {type(e).__name__}")
-            continue
-    
-    return None
-
-
-def _try_gist() -> dict[str, Any] | None:
-    """Tenta Gist - fallback confiável com URL de imagem pronta."""
-    try:
-        print(f"  [Gist] Requisitando banner_service...")
-        from wuwa_calculator.app.banner_service import fetch_current_banner
-        banner = fetch_current_banner()
-        if banner:
-            banner["source"] = "gist"
-            print(f"  [Gist] ✓ Banner carregado com sucesso")
-            return banner
-        else:
-            print(f"  [Gist] ✗ banner_service retornou None")
-            return None
-    except Exception as e:
-        print(f"  [Gist] ✗ Erro: {type(e).__name__}: {e}")
-        return None
-
-
-def _try_jingyuan_fallback() -> dict[str, Any] | None:
-    """Carrega Jingyuan padrão como último resort."""
-    try:
-        print(f"  [Jingyuan] Carregando imagem padrão...")
-        image_bytes = _download_image("https://i.imgur.com/JrRW9Bt.jpeg")
-        ends_at = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-        
-        return {
-            "name": "Jingyuan",
-            "image_bytes": image_bytes,
-            "ends_at": ends_at,
-            "source": "fallback",
-        }
-    except Exception as e:
-        print(f"  [Jingyuan] ✗ Erro: {type(e).__name__}: {e}")
-        return None
-
-
-def _download_image(url: str) -> bytes:
-    """Download de imagem com timeout e headers apropriados."""
-    request = Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-    )
-    with urlopen(request, timeout=10) as response:
-        return response.read()
-
-
-def _parse_tracker_response(data: dict[str, Any]) -> dict[str, Any] | None:
-    """Parse da resposta do WuwaTracker em formato conhecido."""
-    try:
-        if isinstance(data, dict):
-            banners = data.get("banners", data.get("data", []))
-            
-            if isinstance(banners, list) and len(banners) > 0:
-                current_banner = banners[0]
-                
-                return {
-                    "name": current_banner.get("name", "Unknown"),
-                    "image_url": current_banner.get("image", current_banner.get("image_url", "")),
-                    "ends_at": current_banner.get("endDate", current_banner.get("ends_at", "")),
-                    "rarity": current_banner.get("rarity", 5),
-                    "element": current_banner.get("element", ""),
-                }
-        
-        return None
-    except Exception as e:
-        print(f"  [Parser] ✗ Erro ao parsear: {type(e).__name__}")
-        return None
-
-
-def fetch_banner_catalog() -> list[dict[str, Any]]:
-    """Reads the public banner-history page used by WuwaTracker."""
-    page_url = "https://wuwatracker.com/pt/banner-history"
-    try:
-        request = Request(
-            page_url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/html,application/xhtml+xml",
-            },
-        )
-        with urlopen(request, timeout=12) as response:
-            html = response.read().decode("utf-8", errors="replace")
-    except Exception as exc:
-        print(f"[WuwaTracker page] {type(exc).__name__}: {exc}")
-        return []
-
-    normalized_html = html.replace('\\"', '"')
-    pattern = re.compile(
-        r'"character":\{"name":"(?P<name>[^"]+)",'
-        r'"iconSrc":"(?P<icon>[^"]+)".*?'
-        r'"firstStartDate":"(?P<start>[^"]+)"',
-    )
+def parse_catalog(html: str, page_url: str = PAGE_URL) -> list[dict[str, Any]]:
+    """Pure parser: returns catalog entries sorted by start, without images."""
+    normalized = html.replace('\\"', '"')
     catalog: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for match in pattern.finditer(normalized_html):
-        name = match.group("name")
-        start = match.group("start")
-        icon_path = match.group("icon")
-        if name == "next-size-adjust" or "/api/character-icons/" not in icon_path:
+    for match in _PATTERN.finditer(normalized):
+        name, start, icon = match.group("name"), match.group("start"), match.group("icon")
+        if name == "next-size-adjust" or "/api/character-icons/" not in icon or name in seen:
             continue
-        if name in seen:
-            continue
-        seen.add(name)
-        image_url = urljoin(page_url, icon_path)
-        if name.casefold() == "qingxiao":
-            image_url = "https://i.imgur.com/lq6O5Vo.jpeg"
-        # The page publishes the start date; the 14-day phase window keeps
-        # the current announced phase visible without inventing API data.
         try:
             start_date = datetime.strptime(start, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
         except ValueError:
             continue
+        image_url = QINGXIAO_IMAGE_URL if name.casefold() == "qingxiao" else urljoin(page_url, icon)
+        if not allows_remote_content(image_url):
+            continue
+        seen.add(name)
         catalog.append({
             "name": name,
             "image_url": image_url,
@@ -223,51 +55,55 @@ def fetch_banner_catalog() -> list[dict[str, Any]]:
             "speculated": False,
             "source": "wuwatracker-page",
         })
-    catalog.sort(key=lambda item: str(item.get("starts_at", "")))
-    for index, item in enumerate(catalog):
-        if index + 1 < len(catalog):
-            item["ends_at"] = catalog[index + 1]["starts_at"]
+        if len(catalog) >= MAX_CATALOG_ITEMS:
+            break
+    catalog.sort(key=lambda item: item["starts_at"])
+    for index in range(len(catalog) - 1):
+        catalog[index]["ends_at"] = catalog[index + 1]["starts_at"]
+    return catalog
 
-    now = datetime.now(timezone.utc)
-    current_index = next(
-        (
-            index for index, item in enumerate(catalog)
-            if item["starts_at"] <= now.isoformat() <= item["ends_at"]
-        ),
+
+def select_window(catalog: list[dict[str, Any]], now: datetime | None = None) -> list[dict[str, Any]]:
+    """Previous phase, current phase and the next two announced ones."""
+    if not catalog:
+        return []
+    moment = (now or datetime.now(timezone.utc)).isoformat()
+    current = next(
+        (i for i, item in enumerate(catalog) if item["starts_at"] <= moment <= item["ends_at"]),
         len(catalog) - 1,
     )
-    selected_indices = set(range(max(0, current_index - 1), min(len(catalog), current_index + 3)))
-    selected = [item for index, item in enumerate(catalog) if index in selected_indices]
-    for item in selected:
+    return catalog[max(0, current - 1): min(len(catalog), current + 3)]
+
+
+def fetch_banner_catalog() -> list[dict[str, Any]]:
+    try:
+        html = fetch_text(PAGE_URL)
+    except Exception as exc:  # network/policy errors must never crash the UI thread
+        log.warning("banner catalog unavailable: %s", type(exc).__name__)
+        return []
+    selected = select_window(parse_catalog(html))
+
+    def load(item: dict[str, Any]) -> None:
         try:
-            item["image_bytes"] = _download_image(str(item["image_url"]))
+            item["image_bytes"] = fetch_image_bytes(str(item["image_url"]))
         except Exception as exc:
-            print(f"[WuwaTracker page] imagem de {item['name']} indisponível: {type(exc).__name__}")
+            log.info("banner image for %s unavailable: %s", item["name"], type(exc).__name__)
+
+    if selected:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(load, selected))
     return selected
 
 
-def fetch_current_banner_from_tracker() -> dict[str, Any] | None:
-    """
-    Compatibilidade com código anterior.
-    Chama a estratégia de cascata.
-    """
-    return fetch_current_banner_cascading()
-
-
-def get_banner_from_tracker_or_fallback(fallback_banner_data: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """
-    Compatibilidade com código anterior.
-    Tenta cascata e usa fallback se ambos falharem.
-    """
-    banner = fetch_current_banner_cascading()
-    
-    if banner:
-        print(f"[Cascade] Usando banner de {banner.get('source', 'unknown')}")
-        return banner
-    
-    if fallback_banner_data:
-        print("[Cascade] Usando banner fallback fornecido")
-        return fallback_banner_data
-    
-    print("[Cascade] Nenhum banner disponível!")
-    return None
+def fetch_fallback_banner() -> dict[str, Any] | None:
+    """Last-resort banner (static image)."""
+    try:
+        return {
+            "name": "Jingyuan",
+            "image_bytes": fetch_image_bytes(FALLBACK_IMAGE_URL),
+            "ends_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+            "source": "fallback",
+        }
+    except Exception as exc:
+        log.info("fallback banner unavailable: %s", type(exc).__name__)
+        return None
