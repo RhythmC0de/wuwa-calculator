@@ -127,7 +127,7 @@ def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()

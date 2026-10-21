@@ -8,7 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 
 
-from PySide6.QtCore import QSize, Qt, QRectF, QUrl, Signal
+from PySide6.QtCore import QByteArray, QSize, Qt, QRectF, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
@@ -30,7 +30,7 @@ from wuwa_calculator.storage.team_storage import load_teams, save_teams
 SLOT_ROLES = ("Main DPS", "Suporte 1", "Suporte 2")
 
 
-def _read_network_reply(reply: object) -> object:
+def _read_network_reply(reply: object) -> QByteArray | bytes:
     if (
         not getattr(reply, "isOpen", lambda: False)()
         or getattr(reply, "error", lambda: QNetworkReply.NetworkError.UnknownNetworkError)()
@@ -522,6 +522,8 @@ class TeamsTab(QWidget):
     def _refresh_team_list(self) -> None:
         while self.team_cards_layout.count() > 1:
             item = self.team_cards_layout.takeAt(0)
+            if item is None:
+                continue
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
@@ -617,14 +619,20 @@ class TeamsTab(QWidget):
 
     def _select_team_card(self, index: int) -> None:
         for card_index in range(self.team_cards_layout.count() - 1):
-            card = self.team_cards_layout.itemAt(card_index).widget()
+            item = self.team_cards_layout.itemAt(card_index)
+            if item is None:
+                continue
+            card = item.widget()
             if isinstance(card, TeamCardWidget):
                 card.set_selected(card_index == index)
 
     def new_team(self) -> None:
         self.selected_team_index = -1
         for index in range(self.team_cards_layout.count() - 1):
-            card = self.team_cards_layout.itemAt(index).widget()
+            item = self.team_cards_layout.itemAt(index)
+            if item is None:
+                continue
+            card = item.widget()
             if isinstance(card, TeamCardWidget):
                 card.set_selected(False)
         self.name_entry.setText("Nova equipe")

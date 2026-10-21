@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-=======
 # wuwa-calculator
->>>>>>> 33d603e (Atualiza projeto sem vídeos de teste)
 TETHYS SYSTEM 1.4
 ==================
 
@@ -66,33 +63,21 @@ No Linux, os componentes de sistema deverão ser instalados pelo gerenciador de 
 EXECUÇÃO
 --------
 
-<<<<<<< HEAD
-python main.py
-=======
 python tethys.py
->>>>>>> 33d603e (Atualiza projeto sem vídeos de teste)
 
 TEAMS
 -----
 
 Abra a aba Teams para criar equipes, selecionar Main DPS e suportes, configurar Echos, consultar sinergias e salvar as composições.
 
-<<<<<<< HEAD
-As equipes são armazenadas localmente em src\wuwa_calculator\storage\user_data\teams.json.
-=======
-As equipes são armazenadas localmente em data\teams.json.
->>>>>>> 33d603e (Atualiza projeto sem vídeos de teste)
+As equipes são armazenadas no diretório de dados do usuário do sistema. No Linux, o padrão é `~/.local/share/tethys`; a variável `TETHYS_HOME` pode definir um diretório personalizado.
 
 HISTÓRICO
 ---------
 
 A aba Histórico permite salvar, consultar, importar e exportar rotações e comparações de dano.
 
-<<<<<<< HEAD
-O histórico é armazenado localmente em src\wuwa_calculator\storage\user_data\rotation_history.json.
-=======
-O histórico é armazenado localmente em data\rotation_history.json.
->>>>>>> 33d603e (Atualiza projeto sem vídeos de teste)
+O histórico é armazenado no mesmo diretório de dados do usuário das equipes.
 
 MULTIMÍDIA
 ----------
@@ -114,11 +99,7 @@ A Home consulta o banner atual pela variável TETHYS_BANNER_API_URL. Se a fonte 
 WALLPAPER
 ---------
 
-<<<<<<< HEAD
 O wallpaper padrão está em Assets\app_background_reference.png. O código resolve esse asset pela raiz do projeto, independentemente do diretório atual do terminal.
-=======
-O wallpaper padrão está em Assets\app_background_reference.png.
->>>>>>> 33d603e (Atualiza projeto sem vídeos de teste)
 Wallpapers personalizados devem preferencialmente usar proporção 16:10 e resolução de até 1440 x 900 pixels.
 
 PRIVACIDADE

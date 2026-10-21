@@ -29,10 +29,7 @@ from PySide6.QtWidgets import (
 from wuwa_calculator.infrastructure.backend_adapter import calculate_character_damage
 from wuwa_calculator.ui.components.components import Card, TitleLabel
 from wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
-from wuwa_calculator.infrastructure import catalog
-from wuwa_calculator.infrastructure.catalog import Character, Skill, Weapon
-from wuwa_calculator.ui.language import language_settings
-from wuwa_calculator.infrastructure.security_policy import allows_local_image, allows_remote_content
+
 
 
 def _read_network_reply(reply: object) -> bytes:

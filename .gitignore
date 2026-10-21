@@ -20,3 +20,10 @@ Wuwa Damage Lab/
 # Local editor/runtime files
 *.log
 .vscode/*.log
+
+# test
+# Vídeos usados em testes
+test/*.mp4
+test/*.mov
+test/*.mkv
+test/*.avi
