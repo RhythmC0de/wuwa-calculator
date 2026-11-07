@@ -34,7 +34,9 @@ IMAGES_DIR = "images"
 
 def default_training_dir() -> Path:
     """Pasta de dados do usuário (nunca dentro do diretório do programa)."""
-    override = os.environ.get("TETHYS_DATA_DIR")
+    # TETHYS_HOME é o diretório de dados documentado no README;
+    # TETHYS_DATA_DIR continua valendo como apelido antigo.
+    override = os.environ.get("TETHYS_HOME") or os.environ.get("TETHYS_DATA_DIR")
     if override:
         return Path(override).expanduser() / "training"
     if sys.platform.startswith("win"):
@@ -43,7 +45,8 @@ def default_training_dir() -> Path:
         base = str(Path.home() / "Library" / "Application Support")
     else:
         base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "Tethys" / "training"
+    name = "tethys" if sys.platform.startswith("linux") else "Tethys"
+    return Path(base) / name / "training"
 
 
 def new_session_id() -> str:
