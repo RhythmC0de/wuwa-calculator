@@ -1,113 +1,110 @@
-# wuwa-calculator
-TETHYS SYSTEM 1.4
-==================
+# TETHYS SYSTEM 1.4
 
-O Tethys System é o terminal central de Black Shores, também conhecido como a Mesa de Areia da Civilização.
+**Black Shores · Arquivo de Ressonadores**
 
-Na lore de Wuthering Waves, o sistema existe antes do Lamento e é usado para observar eventos, emitir alertas e resolver questões relacionadas ao Lamento. Ele armazena uma quantidade quase infinita de dados e utiliza as emoções provenientes do Lamento para alimentar seus cálculos.
+```text
+[ TETHYS SYSTEM / ARQUIVO DE RESSONADORES ]
+Unidade    JARDINEIROS · BLACK SHORES
+Sessão     AGUARDANDO ID DO RESSONADOR
+```
 
-Dentro do sistema, os dados do Lamento são visualizados como estrelas. Os dados descartados são enviados para a Necroestrela. Apenas o Sistema Tethys compreende a verdadeira natureza do Lamento.
+> *Reuni neste terminal as fichas dos Ressonadores que acompanhamos e os registros de como lutam. Se estiver avaliando um candidato, use os resultados para recomendar uma função. Se o dossiê for de um adversário, estude a rotação e registre o que sua equipe precisa saber antes do próximo encontro.*
+>
+> — Nota de um Jardineiro das Black Shores
 
-Este projeto adapta esse conceito para uma ferramenta local de análise de personagens, equipes, rotações e dano em Wuthering Waves.
+O **Tethys System** é um aplicativo de desktop para consultar Ressonadores, montar equipes, simular rotações e analisar o dano em gravações de combate. O arquivo é apresentado como uma ferramenta interna das Black Shores para estudar candidatos, aliados e adversários. As composições do simulador podem reunir Ressonadores de facções diferentes.
 
-RECURSOS PRINCIPAIS
--------------------
+[Avaliação de combate](#avaliação-de-combate) · [Instalação](#instalação) · [Módulos](#módulos) · [Análise de vídeo](#análise-de-vídeo) · [Planos de desenvolvimento](#planos-de-desenvolvimento) · [Configuração](#configuração) · [Licença](#licença)
 
-- Consulta de personagens por ID.
-- Atributos, armas, habilidades e imagens.
-- Cálculo de dano e rotações.
-- Gerenciamento de equipes, personagens e Echos.
-- Sinergia elemental e resumo de Sonatas.
-- Histórico de rotações e comparações.
-- Importação e exportação de histórico em JSON.
-- Player local de vídeos de referência.
-- Análise de DPS com reconhecimento de números de dano.
-- Gráfico de dano por tempo, picos e menores danos.
-- Wallpaper padrão ou personalizado.
+## Avaliação de combate
 
-REQUISITOS
-----------
+1. **Abra o dossiê.** Consulte o Ressonador por ID e revise seus atributos, armas e habilidades.
+2. **Defina o cenário.** Em **Teams**, configure os Echos e simule o Ressonador como DPS principal ou suporte. Confira as sinergias elementais e os efeitos de Sonata.
+3. **Compare simulação e campo.** Calcule o dano esperado da rotação e use **Multimídia** para analisar uma gravação de combate.
+4. **Registre os resultados.** Salve as rotações e comparações no **Histórico**. Para um candidato, os resultados ajudam a recomendar uma função. Para um aliado ou adversário, ajudam a entender como ele luta e interage com a composição.
 
-- Windows 10 ou superior; suporte Linux planejado.
-- Python 3.11 ou superior.
-- Dependências listadas em requirements.txt.
+Na ambientação do projeto, o **Teste de Germinação** é o protocolo aplicado a candidatos ao recrutamento. A consulta de dossiês e a análise de combate servem também para estudar Ressonadores de outras facções.
 
-REQUISITOS FUTUROS PARA LINUX
------------------------------
+## Instalação
 
-A versão Linux deverá ser preparada e validada em distribuições atuais, como Ubuntu 22.04+, Debian 12+ ou Fedora equivalente, com:
+| Plataforma | Disponibilidade |
+| --- | --- |
+| Windows 10 ou superior | Instalação a partir do código-fonte |
+| Linux | Primeira distribuição planejada em **AppImage** |
 
-- Python 3.11 ou superior.
-- python3-venv e python3-pip.
-- Qt6 e bibliotecas gráficas do sistema.
-- Mesa/OpenGL e EGL.
-- X11 ou Wayland.
-- FFmpeg e codecs necessários para reprodução de vídeo.
-- Bibliotecas de áudio compatíveis com Qt Multimedia.
-- Dependências Python de requirements.txt.
+### Windows
 
-Os nomes dos pacotes podem variar entre distribuições. A compatibilidade Linux só deverá ser considerada concluída após testes de janela, áudio, vídeo, OCR e aceleração gráfica.
+Você precisa do **Python 3.11 ou superior** e das dependências de [`requirements.txt`](requirements.txt).
 
-INSTALAÇÃO
-----------
+Abra o PowerShell na pasta do projeto. Crie o ambiente virtual, instale as dependências e inicie o terminal.
 
-No PowerShell, dentro da pasta do projeto:
-
+```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe tethys.py
+```
 
-No Linux, os componentes de sistema deverão ser instalados pelo gerenciador de pacotes da distribuição e as dependências Python em um ambiente virtual.
+### Linux · AppImage planejado
 
-EXECUÇÃO
---------
+O **AppImage** é o formato previsto para a primeira distribuição no Linux. O pacote está planejado para incluir o runtime Python e as dependências da aplicação, permitindo iniciar o terminal sem configurar um ambiente virtual.
 
-python tethys.py
+Ubuntu 22.04+, Debian 12+ e Fedora são alvos iniciais de validação. Antes da publicação, a validação vai cobrir abertura da interface em X11 e Wayland, reprodução de áudio e vídeo, reconhecimento de dano por OCR e aceleração gráfica. As distribuições validadas e eventuais requisitos do sistema serão documentados junto ao pacote.
 
-TEAMS
------
+## Módulos
 
-Abra a aba Teams para criar equipes, selecionar Main DPS e suportes, configurar Echos, consultar sinergias e salvar as composições.
+| Módulo do terminal | O que você pode fazer |
+| --- | --- |
+| **Dossiê de Ressonadores** | Consultar personagens por ID e visualizar atributos, armas, habilidades e imagens. |
+| **Simulador de Rotações** | Calcular o dano de habilidades e rotações para comparar cenários. |
+| **Teams** | Montar e salvar equipes, definir o Main DPS e os suportes, configurar Echos e consultar sinergias elementais e o resumo de Sonatas. |
+| **Histórico** | Salvar e consultar rotações e comparações de dano. Importar e exportar registros em JSON. |
+| **Multimídia** | Reproduzir vídeos locais de referência e analisar o dano exibido durante o combate. |
 
-As equipes são armazenadas no diretório de dados do usuário do sistema. No Linux, o padrão é `~/.local/share/tethys`; a variável `TETHYS_HOME` pode definir um diretório personalizado.
+## Análise de vídeo
 
-HISTÓRICO
----------
+1. Abra **Multimídia** e selecione uma gravação local de combate.
+2. Preencha **Ignorar vinheta** com o tempo inicial a descartar e **Início da análise** com o ponto em que deseja começar a leitura. Os dois campos usam o formato `mm:ss`.
+3. Inicie a análise. O terminal usa o maior dos dois horários. Se a vinheta for de `00:05` e o início da análise estiver em `00:12`, a leitura começa em `00:12`.
+4. Consulte o gráfico para acompanhar o dano ao longo do tempo, o DPS, o dano acumulado, a fórmula apresentada e os maiores e menores valores detectados.
 
-A aba Histórico permite salvar, consultar, importar e exportar rotações e comparações de dano.
+A simulação calcula o dano a partir dos parâmetros da rotação. A análise de vídeo usa OCR para reconhecer os números exibidos na gravação, de modo que a leitura depende da legibilidade desses números.
 
-O histórico é armazenado no mesmo diretório de dados do usuário das equipes.
+## Planos de desenvolvimento
 
-MULTIMÍDIA
-----------
+### Expansão do dossiê
 
-Selecione um vídeo local para consultar a rotação e iniciar a análise de dano.
+O dossiê atual concentra a ficha técnica do Ressonador. A expansão de lore prevê:
 
-- Ignorar vinheta: tempo inicial que deve ser desconsiderado.
-- Início da análise: momento em que a leitura de dano deve começar.
-- Os dois campos usam o formato mm:ss.
-- A análise efetiva começa no maior dos dois horários.
+- **Histórico de afiliações** com facção, cargo e período conhecido para cada vínculo registrado.
+- **Relação com as Black Shores** conforme o contexto do registro, como aliado, candidato, adversário ou vínculo desconhecido.
+- **Registros de lore** com indicação da fonte e do capítulo ou versão, quando disponíveis. Revelações da história ficarão recolhidas por padrão.
 
-O gráfico apresenta DPS, dano acumulado, fórmula, picos e menores danos.
+## Configuração
 
-BANNER DA HOME
---------------
+| Variável | Finalidade |
+| --- | --- |
+| `TETHYS_HOME` | Define o diretório de dados do usuário. |
+| `TETHYS_BANNER_API_URL` | Define a fonte externa consultada para exibir o banner atual na Home. Se a fonte estiver indisponível, o app continua funcionando em modo offline. |
 
-A Home consulta o banner atual pela variável TETHYS_BANNER_API_URL. Se a fonte externa não estiver disponível, o programa continua funcionando em modo offline.
+**Wallpaper.** O arquivo padrão fica em `Assets/app_background_reference.png` e é localizado a partir da raiz do projeto. Para imagens personalizadas, use preferencialmente a proporção **16:10**, com resolução de até **1440 × 900 px**.
 
-WALLPAPER
----------
+### Dados locais e conexões externas
 
-O wallpaper padrão está em Assets\app_background_reference.png. O código resolve esse asset pela raiz do projeto, independentemente do diretório atual do terminal.
-Wallpapers personalizados devem preferencialmente usar proporção 16:10 e resolução de até 1440 x 900 pixels.
+Equipes, histórico e preferências são armazenados localmente no diretório de dados do usuário. No Linux, o caminho padrão é `~/.local/share/tethys`. Use a exportação em JSON na aba **Histórico** para guardar ou transferir registros de rotações e comparações.
 
-PRIVACIDADE
------------
+Banner, imagens e recursos de análise podem consultar fontes externas quando utilizados.
 
-Equipes, histórico e preferências são armazenados localmente. Banner, imagens e recursos de análise podem acessar fontes externas quando utilizados.
+## Referências de lore
 
-LICENÇA
--------
+No jogo, Paranora descreve como os **Gardeners** reúnem informações sobre candidatos e como o Tethys define um **Germination Test** sob medida para cada um. Tykwer identifica Camellya como avaliadora dos testes de combate. O Arquivo de Ressonadores e a nota do Jardineiro são criações do projeto inspiradas nesse processo. Aqui, **Jardineiros** e **Teste de Germinação** traduzem os termos em inglês.
 
-Este projeto é distribuído sob a licença MIT. Consulte LICENSE para o texto completo.
+- [Paranora — diálogo sobre recrutamento e preparação dos testes](https://wutheringwaves.fandom.com/wiki/Paranora)
+- [Tykwer — diálogo sobre os testes de combate](https://wutheringwaves.fandom.com/wiki/Tykwer)
+- [Camellya — notas de desenvolvimento sobre a seleção de recrutas](https://wutheringwaves.notion.site/Developer-s-Notes-Camellya-14bef7f91e4b81fbab4bc266df913727)
+
+## Licença
+
+O código do Tethys System é distribuído sob a licença MIT. Consulte o arquivo [`LICENSE`](LICENSE).
+
+*Tethys System é um projeto de fãs inspirado em Wuthering Waves, da Kuro Games.*

@@ -63,7 +63,7 @@ def _candidate_directories() -> list[Path]:
 
 
 def _module_files(directory: Path) -> list[Path]:
-    """Binários ``damage_analyzer*`` presentes na pasta (qualquer versão do Python)."""
+    """Binários ``damage_analyzer*`` presentes na pasta."""
     if not directory.is_dir():
         return []
     return [

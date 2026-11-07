@@ -315,10 +315,18 @@ class _LegacyVideoPlayer(Card):
             return
         try:
             tracks = self.player.video_get_spu_description() or self.player.video_get_subtitle_description() or []
+            try:
+                tracks = list(tracks)
+            except TypeError:
+                tracks = []
             with QSignalBlocker(self.subtitle_box):
                 self.subtitle_box.clear()
                 self.subtitle_box.addItem("Legendas desativadas", -1)
-                for track_id, name in tracks:
+                for track in tracks:
+                    try:
+                        track_id, name = track
+                    except (TypeError, ValueError):
+                        continue
                     if int(track_id) >= 0:
                         label = name.decode("utf-8", errors="replace") if isinstance(name, bytes) else str(name)
                         self.subtitle_box.addItem(label or "Legenda", int(track_id))

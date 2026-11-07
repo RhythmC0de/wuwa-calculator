@@ -72,6 +72,87 @@ def relative_to_package(path: Path, package: Path) -> list[str] | None:
     return parts
 
 
+APP_PACKAGE_IMPORT = re.compile(
+    r"^(?P<indent>\s*)from\s+(?P<mod>\.+app|\.+|(?:src\.)?wuwa_calculator\.app|(?:src\.)?wuwa_calculator)"
+    r"\s+import\s+(?P<names>[^()#\n]+?)\s*$"
+)
+
+
+_DONE = ""
+
+
+def _relative(new_pkg: list[str], target: list[str]) -> str:
+    common = 0
+    for a, b in zip(new_pkg, target):
+        if a != b:
+            break
+        common += 1
+    return "." * (len(new_pkg) - common + 1) + ".".join(target[common:])
+
+
+def fix_package_imports(text: str, old_pkg: list[str] | None, new_pkg: list[str] | None) -> tuple[str, int]:
+    """`from . import native_engine`, `from ...app import native_engine` e
+    `from wuwa_calculator.app import native_engine`: o pacote não mudou, mas o
+    NOME importado foi para outro pacote. Divide a linha, uma por destino."""
+    changes = 0
+    out = []
+    for line in text.split("\n"):
+        match = APP_PACKAGE_IMPORT.match(line)
+        if not match:
+            out.append(line)
+            continue
+        mod = match.group("mod")
+        # pacote de onde os nomes são importados, em partes absolutas dentro do pacote
+        if mod.startswith("."):
+            dots = len(mod) - 3 if mod.endswith("app") else len(mod)
+            if old_pkg is None or dots - 1 > len(old_pkg):
+                out.append(line)
+                continue
+            base = old_pkg[: len(old_pkg) - (dots - 1)]
+            package = base + (["app"] if mod.endswith("app") else [])
+            style = "relative"
+            prefix = ""
+        else:
+            prefix = mod[: -len(".app")] if mod.endswith(".app") else mod
+            package = ["app"] if mod.endswith(".app") else []
+            style = "absolute"
+        if package != ["app"]:
+            out.append(line)
+            continue
+
+        keep, moved = [], {}
+        for item in (part.strip() for part in match.group("names").split(",")):
+            name = item.split(" as ")[0].strip()
+            target = MOVED.get(f"app.{name}")
+            if target is None:
+                keep.append(item)
+                continue
+            moved.setdefault(".".join(target.split(".")[:-1]), []).append(item)
+        if not moved:
+            out.append(line)
+            continue
+
+        indent = match.group("indent")
+        if keep:
+            # O que ficou em app/ continua em app/, mas o ARQUIVO pode ter mudado de pasta.
+            if style == "relative" and new_pkg is not None:
+                keep_from = _relative(new_pkg, ["app"])
+            else:
+                keep_from = mod
+            out.append(f"{indent}from {keep_from} import {', '.join(keep)}{_DONE}")
+        for package_path, items in moved.items():
+            parts = package_path.split(".")
+            if style == "relative" and new_pkg is not None:
+                where = _relative(new_pkg, parts)
+            elif style == "relative":
+                where = "." + package_path
+            else:
+                where = f"{prefix}.{package_path}"
+            out.append(f"{indent}from {where} import {', '.join(items)}{_DONE}")
+        changes += 1
+    return "\n".join(out), changes
+
+
 def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None) -> tuple[str, int]:
     """Reescreve imports de um arquivo. `old_parts`/`new_parts`: caminho do
     módulo dentro do pacote antes/depois da mudança (None se fora do pacote)."""
@@ -88,14 +169,21 @@ def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None
     pattern = "|".join(re.escape(name) for name in sorted(MOVED, key=len, reverse=True))
     text = re.sub(rf"(?P<prefix>(?:src\.)?wuwa_calculator)\.(?P<mod>{pattern})\b", absolute, text)
 
+    text, extra = fix_package_imports(
+        text,
+        old_parts[:-1] if old_parts is not None else None,
+        new_parts[:-1] if new_parts is not None else None,
+    )
+    changes += extra
+
     if old_parts is None or new_parts is None:
-        return text, changes
+        return text.replace(_DONE, ""), changes
 
     old_pkg, new_pkg = old_parts[:-1], new_parts[:-1]
     out = []
     for line in text.split("\n"):
         match = RELATIVE_IMPORT.match(line)
-        if not match:
+        if not match or line.endswith(_DONE):
             out.append(line)
             continue
         dots = len(match.group("dots"))
@@ -123,11 +211,11 @@ def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None
         if new_line != line:
             changes += 1
         out.append(new_line)
-    return "\n".join(out), changes
+    return "\n".join(out).replace(_DONE, ""), changes
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
@@ -195,7 +283,7 @@ def main() -> int:
         if path.name == "reorganize_project.py":
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
-            if old_ref.search(line):
+            if old_ref.search(line) and not re.search(r"app\s+import\s+main\b", line):
                 leftovers.append(f"  {path.relative_to(root)}:{number}: {line.strip()}")
     if leftovers:
         print("\nConfira manualmente (referências ao local antigo):")
