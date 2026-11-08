@@ -165,10 +165,10 @@ python -m venv .venv
 
 ### 2. Engine de vídeo (opcional, para a análise)
 
-Ferramentas: **CMake 3.20+**, compilador **C++20**, **OpenCV** (`core`, `videoio`, `imgproc`), **pybind11** e **ONNX Runtime** em `native/damage_analyzer/third_party/onnxruntime`.
+Ferramentas: **CMake 3.20+**, compilador **C++20**, **OpenCV** (`core`, `videoio`, `imgproc`), **pybind11** e **ONNX Runtime** em `src/wuwa_calculator/native/damage_analyzer/third_party/onnxruntime`.
 
 ```bash
-cmake -S native/damage_analyzer -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S src/wuwa_calculator/native/damage_analyzer -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
 

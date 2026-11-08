@@ -177,8 +177,16 @@ std::vector<DamageEvent> EventTracker::finish() {
                     // Leitura do mesmo contador em outro lugar (a câmera
                     // balança e o texto muda de posição): o valor cai dentro
                     // da faixa que o contador tinha naquele momento.
+                    // Só vale perto do contador: um hit no centro da tela com
+                    // valor parecido com a vida do chefe é dano real.
                     const double margin = 0.01 * spot.max_value + 5.0;
-                    if (event.timestamp >= spot.t_first - 1.5 &&
+                    const double radius =
+                        params_.static_value_radius_in_heights * limit;
+                    if (std::hypot(
+                            event.center_x - spot.center_x,
+                            event.center_y - spot.center_y
+                        ) <= radius &&
+                        event.timestamp >= spot.t_first - 1.5 &&
                         event.timestamp <= spot.t_last + 1.5 &&
                         event.damage >= spot.min_value - margin &&
                         event.damage <= spot.max_value + margin) {
@@ -220,10 +228,20 @@ std::vector<DamageEvent> EventTracker::finish() {
             }
             if (longer.compare(
                     longer.size() - shorter.size(), shorter.size(), shorter
-                ) == 0) {
-                drop[i] = true;
-                break;
+                ) != 0) {
+                continue;
             }
+            const double suffix_limit =
+                params_.suffix_distance_in_heights *
+                std::max(events[i].height, events[j].height);
+            if (std::hypot(
+                    double(events[i].center_x - events[j].center_x),
+                    double(events[i].center_y - events[j].center_y)
+                ) > suffix_limit) {
+                continue;
+            }
+            drop[i] = true;
+            break;
         }
     }
 

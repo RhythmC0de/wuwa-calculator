@@ -22,8 +22,11 @@ Wuwa Damage Lab/
 .vscode/*.log
 
 # test
-# Vídeos usados em testes
-test/*.mp4
-test/*.mov
-test/*.mkv
-test/*.avi
+# Vídeos
+*.mp4
+*.mov
+*.mkv
+*.avi
+
+# OS generated files
+*.so

@@ -274,6 +274,27 @@ AnalysisResult analyze_video(
 
     VideoReader video(video_path);
 
+    // Experimento: DAMAGE_ANALYZER_CV_THREADS=<n> limita as threads internas do
+    // OpenCV durante esta análise. O ajuste é global no processo, por isso o
+    // valor anterior é restaurado ao sair (inclusive em cancelamento/exceção).
+    struct CvThreadsGuard {
+        int previous = -1;
+        CvThreadsGuard() {
+            if (const char* env = std::getenv("DAMAGE_ANALYZER_CV_THREADS")) {
+                const int wanted = std::atoi(env);
+                if (wanted > 0) {
+                    previous = cv::getNumThreads();
+                    cv::setNumThreads(wanted);
+                }
+            }
+        }
+        ~CvThreadsGuard() {
+            if (previous >= 0) {
+                cv::setNumThreads(previous);
+            }
+        }
+    } cv_threads_guard;
+
     AnalysisResult result;
 
     result.fps = video.fps();

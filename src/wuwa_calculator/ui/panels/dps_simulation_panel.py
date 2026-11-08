@@ -20,15 +20,6 @@ from PySide6.QtWidgets import (
 from wuwa_calculator.ui.components.components import Card
 
 
-def _native_engine_module():
-    """Importa o localizador da engine (pacote ou execução direta)."""
-    try:
-        from ...infrastructure import native_engine
-    except ImportError:
-        import native_engine  # type: ignore[no-redef]
-    return native_engine
-
-
 ANALYSIS_BUCKET_SECONDS = 5.0
 INACTIVITY_TIMEOUT = 12.0
 MIN_INACTIVITY_ANALYSIS_SECONDS = 15.0
@@ -196,6 +187,7 @@ class LiveDamageAnalysisWorker(QObject):
     """Executa a engine C++ nativa e publica seus eventos para a interface.
 
     A detecção, OCR, filtragem, rastreamento e deduplicação pertencem à engine.
+    A análise roda em um processo separado, sem compartilhar bibliotecas com Qt.
     Esta classe apenas adapta o resultado nativo aos sinais Qt já consumidos
     pelo painel. O streaming incremental será adicionado na próxima etapa.
     """
@@ -217,7 +209,6 @@ class LiveDamageAnalysisWorker(QObject):
         self.end_seconds = max(0.0, end_seconds)
         self.start_time = max(0.0, start_time if start_time is not None else skip_seconds)
         self._cancelled = False
-        self._cancel_token = None
 
     def update_position(self, seconds: float) -> None:
         # Mantido por compatibilidade com o painel atual. A engine analisa o
@@ -226,85 +217,30 @@ class LiveDamageAnalysisWorker(QObject):
 
     def cancel(self) -> None:
         self._cancelled = True
-        # A engine verifica o token a cada frame e devolve o resultado parcial.
-        # O token é por análise: cancelar esta não afeta uma análise nova.
-        token = self._cancel_token
-        if token is not None:
-            token.cancel()
-
-    @staticmethod
-    def _load_engine():
-        return _native_engine_module().load_engine()
-
-    @staticmethod
-    def _stat(result, name: str) -> int:
-        """Lê uma estatística da engine sem quebrar com builds mais antigas."""
-        return int(getattr(result, name, 0) or 0)
 
     def run(self) -> None:
         try:
             if self._cancelled:
                 return
 
-            engine = self._load_engine()
-            config = engine.AnalyzerConfig()
-            config.verbose = False
-            self._cancel_token = engine.CancelToken()
-            config.cancel_token = self._cancel_token
-            if self._cancelled:
-                return
+            from wuwa_calculator.infrastructure.video_analysis import analyze_isolated
 
-            # A engine começa em skip_seconds (= maior entre "Ignorar vinheta"
-            # e "Início da análise"). start_time é só a origem do gráfico.
             scan_start = max(self.skip_seconds, self.start_time)
-
-            result = engine.analyze_video(
-                self.video_path,
-                scan_start,
+            data = analyze_isolated(
+                self.video_path, scan_start,
                 self.end_seconds if self.end_seconds > scan_start else -1.0,
-                config,
+                lambda: self._cancelled,
             )
-
-            if self._cancelled or getattr(result, "cancelled", False):
+            if data is None or self._cancelled:
                 return
 
-            # Publica somente eventos produzidos pela engine; não faz OCR,
-            # deduplicação ou estimativa de dano no Python.
-            events = sorted(result.events, key=lambda event: float(event.timestamp))
-            for event in events:
+            for event in data.pop("events"):
                 if self._cancelled:
                     return
-                damage = float(event.damage)
                 self.damage_detected.emit({
-                    "timestamp": float(event.timestamp),
-                    "damage": damage,
-                    "hits": 1,
-                    "peak": damage,
-                    "accumulated": 0.0,
+                    **event, "hits": 1, "peak": event["damage"], "accumulated": 0.0,
                 })
-
-            self.analysis_completed.emit({
-                "reason": "native_complete",
-                "last_hit": max(
-                    (float(event.timestamp) for event in events),
-                    default=-1.0,
-                ),
-                "total_damage": float(result.total_damage),
-                "total_hits": int(result.total_hits),
-                "peak_damage": float(result.peak_damage),
-                "duration": float(result.duration),
-                "frames_read": self._stat(result, "frames_read"),
-                "frames_analyzed": self._stat(result, "frames_analyzed"),
-                "candidates_detected": self._stat(result, "candidates_detected"),
-                "candidates_rejected_hud": self._stat(result, "candidates_rejected_hud"),
-                "candidates_rejected_geometry": self._stat(result, "candidates_rejected_geometry"),
-                "candidates_passed_filters": self._stat(result, "candidates_passed_filters"),
-                "ocr_calls": self._stat(result, "ocr_calls"),
-                "ocr_no_numeric_result": self._stat(result, "ocr_no_numeric_result"),
-                "ocr_rejected_confidence": self._stat(result, "ocr_rejected_confidence"),
-                "ocr_ignored_countdown": self._stat(result, "ocr_ignored_countdown"),
-                "ocr_below_min_damage": self._stat(result, "ocr_below_min_damage"),
-            })
+            self.analysis_completed.emit(data)
         except Exception as error:
             # Report unexpected pybind11/API errors too; otherwise the QThread can
             # end without a useful message and the UI appears to do nothing.

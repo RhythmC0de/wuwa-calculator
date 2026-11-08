@@ -50,6 +50,9 @@ public:
         // interrompidas do mesmo contador).
         double static_min_duration = 0.25;
         double static_max_move_in_heights = 0.6;
+        // Um evento longe do contador não é apagado só porque o valor cai na
+        // faixa dele. O raio cobre o balanço de câmera (o texto escorrega).
+        double static_value_radius_in_heights = 5.0;
 
         // Leitura com dígitos a mais: o OCR às vezes cola um dígito de um
         // ícone ao lado ("24274" vira "2424274"). Se, na mesma janela de
@@ -58,6 +61,10 @@ public:
         // evento longo é descartado.
         double suffix_window = 0.6;
         int suffix_min_digits = 3;
+        // O sufixo só apaga o evento longo se o curto estiver perto (em alturas
+        // de texto): um hit longo verdadeiro não some por causa de outro hit,
+        // em outro lugar da tela, que só coincide no final.
+        double suffix_distance_in_heights = 6.0;
 
         // Valores muito altos (ex.: >= 1.000.000) são quase sempre leituras
         // erradas de números sobrepostos; só valem com mais confirmações.
