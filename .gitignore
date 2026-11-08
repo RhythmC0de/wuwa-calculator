@@ -24,6 +24,8 @@ Wuwa Damage Lab/
 .vscode/*.log
 
 # test
+test/
+
 # Vídeos
 *.mp4
 *.mov
