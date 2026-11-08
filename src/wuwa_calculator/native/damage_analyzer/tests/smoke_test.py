@@ -11,7 +11,9 @@ Uso:
 
 Requisitos: numpy, opencv-python, pillow.
 """
+
 import argparse
+import importlib
 import os
 import sys
 import tempfile
@@ -32,7 +34,7 @@ DAMAGE = [
     (3.4, 250000, 520, 380),
     (4.5, 999, 700, 430),
     (5.0, 48100, 650, 450),
-    (5.1, 31337, 450, 330),   # coexiste com o anterior
+    (5.1, 31337, 450, 330),  # coexiste com o anterior
     (6.5, 1500000, 480, 410),
 ]
 LIFETIME = 0.8
@@ -40,6 +42,7 @@ RISE_PX_PER_SEC = 60
 
 
 def find_font(size: int) -> ImageFont.FreeTypeFont:
+    """Return find font."""
     candidates = [
         "C:/Windows/Fonts/arialbd.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -56,6 +59,7 @@ def find_font(size: int) -> ImageFont.FreeTypeFont:
 
 
 def background() -> np.ndarray:
+    """Background ."""
     rng = np.random.default_rng(7)
     y = np.linspace(25, 70, H, dtype=np.float32)[:, None, None]
     frame = np.repeat(np.repeat(y, W, axis=1), 3, axis=2)
@@ -65,44 +69,80 @@ def background() -> np.ndarray:
 
 
 def draw_text(draw, xy, text, font, fill, outline, width):
-    draw.text(xy, text, font=font, fill=fill,
-              stroke_width=width, stroke_fill=outline)
+    """Draw text."""
+    # Keep the established call signature used by existing callers.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    draw.text(
+        xy, text, font=font, fill=fill, stroke_width=width, stroke_fill=outline
+    )
 
 
 def render(t: float, base: np.ndarray, fonts) -> np.ndarray:
+    """Render ."""
     img = Image.fromarray(cv2.cvtColor(base, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(img)
 
     # --- HUD (deve ser ignorado pelas zonas) -----------------------------
-    draw_text(draw, (30, 40), "128456", fonts["hud"], (255, 255, 255),
-              (0, 0, 0), 2)                       # canto superior esquerdo
-    draw_text(draw, (1080, 300), "845320", fonts["hud"], (255, 240, 200),
-              (0, 0, 0), 2)                       # painel da equipe
-    draw_text(draw, (1000, 640), "990011", fonts["hud"], (255, 255, 255),
-              (0, 0, 0), 2)                       # habilidades
+    draw_text(
+        draw, (30, 40), "128456", fonts["hud"], (255, 255, 255), (0, 0, 0), 2
+    )  # canto superior esquerdo
+    draw_text(
+        draw,
+        (1080, 300),
+        "845320",
+        fonts["hud"],
+        (255, 240, 200),
+        (0, 0, 0),
+        2,
+    )  # painel da equipe
+    draw_text(
+        draw,
+        (1000, 640),
+        "990011",
+        fonts["hud"],
+        (255, 255, 255),
+        (0, 0, 0),
+        2,
+    )  # habilidades
 
     # --- Contagem regressiva fora das zonas (filtro temporal) -------------
     countdown = 125 - int(t)  # 125,124,123... uma vez por segundo
     if 0.5 <= t <= 7.0:
-        draw_text(draw, (300, 250), str(countdown), fonts["hud"],
-                  (255, 255, 255), (0, 0, 0), 2)
+        draw_text(
+            draw,
+            (300, 250),
+            str(countdown),
+            fonts["hud"],
+            (255, 255, 255),
+            (0, 0, 0),
+            2,
+        )
 
     # --- Números de dano ---------------------------------------------------
     for start, value, x, y in DAMAGE:
         age = t - start
         if 0.0 <= age <= LIFETIME:
             yy = y - RISE_PX_PER_SEC * age
-            draw_text(draw, (x, yy), str(value), fonts["damage"],
-                      (255, 150, 40), (120, 40, 0), 3)
+            draw_text(
+                draw,
+                (x, yy),
+                str(value),
+                fonts["damage"],
+                (255, 150, 40),
+                (120, 40, 0),
+                3,
+            )
 
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 
 def make_video(path: Path) -> None:
+    """Make video."""
     fonts = {"damage": find_font(38), "hud": find_font(30)}
     base = background()
     writer = cv2.VideoWriter(
-        str(path), cv2.VideoWriter_fourcc(*"MJPG"), FPS, (W, H))
+        str(path), cv2.VideoWriter_fourcc(*"MJPG"), FPS, (W, H)
+    )
     if not writer.isOpened():
         raise SystemExit("Não foi possível criar o vídeo de teste.")
     for i in range(int(DURATION * FPS)):
@@ -111,9 +151,14 @@ def make_video(path: Path) -> None:
 
 
 def main() -> int:
+    """Run the smoke test command-line entry point."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("module_dir", help="pasta que contém damage_analyzer*.so/.pyd")
-    parser.add_argument("--keep", action="store_true", help="mantém o vídeo gerado")
+    parser.add_argument(
+        "module_dir", help="pasta que contém damage_analyzer*.so/.pyd"
+    )
+    parser.add_argument(
+        "--keep", action="store_true", help="mantém o vídeo gerado"
+    )
     args = parser.parse_args()
 
     module_dir = Path(args.module_dir).resolve()
@@ -121,13 +166,13 @@ def main() -> int:
         os.add_dll_directory(str(module_dir))
     sys.path.insert(0, str(module_dir))
 
-    import damage_analyzer as da  # noqa: E402
+    da = importlib.import_module("damage_analyzer")
 
     print("módulo:", da.__file__)
     print("modelos:", da.find_models_directory())
 
     with tempfile.TemporaryDirectory() as tmp:
-        video = Path(tmp) / "sintético ção.avi"   # acentos de propósito
+        video = Path(tmp) / "sintético ção.avi"  # acentos de propósito
         make_video(video)
         if args.keep:
             Path("synthetic_test.avi").write_bytes(video.read_bytes())
@@ -141,7 +186,10 @@ def main() -> int:
 
     print("\nEventos encontrados:")
     for e in result.events:
-        print(f"  t={e.timestamp:5.2f}s  dano={e.damage:>8}  ({e.center_x},{e.center_y})")
+        print(
+            f"  t={e.timestamp:5.2f}s  dano={e.damage:>8} "
+            f" ({e.center_x},{e.center_y})"
+        )
     print("\nesperado:", expected)
     print("achado:  ", found)
 

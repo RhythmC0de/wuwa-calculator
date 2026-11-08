@@ -143,7 +143,7 @@ Requires **Python 3.11 or later**.
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e .
 .venv/bin/python tethys.py
 ```
 
@@ -152,7 +152,7 @@ python3 -m venv .venv
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe tethys.py
 ```
 
@@ -222,3 +222,9 @@ In the game, Paranora describes how the **Gardeners** gather information on cand
 Tethys Archive code is released under the MIT license. See [`LICENSE`](LICENSE).
 
 <sub>*Tethys Archive is a non-profit fan project inspired by Wuthering Waves by Kuro Games. It is not affiliated with or endorsed by Kuro Games. Names and trademarks belong to their owners.*</sub>
+
+
+Development and imports: install with `python -m pip install -e ".[dev]"` and run `python -m pytest`. Import `wuwa_calculator...`; `src` is only the source directory. Explicit relative imports within a subpackage are valid. After installation, `tethys` starts the app. The `python tethys.py` launcher still supports running a checkout directly.
+
+
+Screenshot OCR is optional: `python -m pip install -e ".[ocr]"`. PaddlePaddle has no wheel for this environment’s Python 3.14; use a separate environment with a supported Python version (for example, 3.12) for this feature. Base installation and tests do not require PaddlePaddle. The native video engine has its own OCR configuration.

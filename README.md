@@ -150,7 +150,7 @@ Requer **Python 3.11 ou superior**.
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -e .
 .venv/bin/python tethys.py
 ```
 
@@ -159,7 +159,7 @@ python3 -m venv .venv
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -e .
 .\.venv\Scripts\python.exe tethys.py
 ```
 
@@ -229,3 +229,9 @@ No jogo, Paranora descreve como os **Gardeners** reúnem informações sobre can
 O código do Tethys Archive é distribuído sob a licença MIT. Consulte [`LICENSE`](LICENSE).
 
 <sub>*Tethys Archive é um projeto de fãs, sem fins lucrativos, inspirado em Wuthering Waves, da Kuro Games. Não é afiliado nem endossado pela Kuro Games. Nomes e marcas pertencem aos seus donos.*</sub>
+
+
+Desenvolvimento e imports: instale com `python -m pip install -e ".[dev]"` e execute `python -m pytest`. Use `wuwa_calculator...` nos imports; `src` é apenas o diretório de fontes. Imports relativos explícitos dentro de um subpacote são válidos. Após a instalação, o comando `tethys` inicia o aplicativo. O launcher `python tethys.py` continua compatível com a execução direta do checkout.
+
+
+O OCR de screenshots é opcional: `python -m pip install -e ".[ocr]"`. O PaddlePaddle não oferece wheel para o Python 3.14 deste ambiente; para esse recurso, use um ambiente separado com Python compatível (por exemplo, 3.12). A instalação básica e os testes não exigem PaddlePaddle. A engine nativa de vídeo tem sua própria configuração de OCR.

@@ -2,21 +2,23 @@
 """Move os arquivos de `app/` para a camada certa e corrige os imports.
 
 Uso (a partir da raiz do projeto):
-    python tools/reorganize_project.py            # só mostra o plano (nada muda)
+    python tools/reorganize_project.py            # só mostra o plano
+    (nada muda)
     python tools/reorganize_project.py --apply    # aplica
 
 O que faz:
-  * move cada arquivo da tabela MOVES (com `git mv` quando o projeto é git);
+  * move cada arquivo da tabela MOVES (com `git mv` quando o projeto é
+  git);
   * reescreve imports absolutos (`wuwa_calculator.app.X` e
-    `src.wuwa_calculator.app.X`, mantendo o prefixo que cada arquivo usa) e
+    `src.wuwa_calculator.app.X`, mantendo o prefixo que cada arquivo
+    usa) e
     imports relativos (recalculados a partir do novo local);
   * cria `__init__.py` nas pastas de destino que não tiverem;
   * lista referências que ele não conseguiu corrigir sozinho (scripts de
     build, .spec, docs, `from ..app import X`).
 
 É idempotente: rodar de novo depois de aplicar não altera nada.
-Só usa a biblioteca padrão.
-"""
+Só usa a biblioteca padrão."""
 
 from __future__ import annotations
 
@@ -38,11 +40,24 @@ MOVES: dict[str, str] = {
     "app/review_support.py": "ui/review_support.py",
 }
 
-SKIP_DIRS = {"__pycache__", ".git", ".venv", "venv", "build", "dist", "node_modules", ".mypy_cache"}
-RELATIVE_IMPORT = re.compile(r"^(?P<indent>\s*)from\s+(?P<dots>\.+)(?P<module>[\w.]*)\s+import\s+(?P<rest>.*)$")
+SKIP_DIRS = {
+    "__pycache__",
+    ".git",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "node_modules",
+    ".mypy_cache",
+}
+RELATIVE_IMPORT = re.compile(
+    "^(?P<indent>\\s*)from\\s+(?P<dots>\\.+)(?P<module>[\\w.]*)\\s+import"
+    "\\s+(?P<rest>.*)$"
+)
 
 
 def dotted(path: str) -> str:
+    """Dotted ."""
     return path[:-3].replace("/", ".")
 
 
@@ -50,21 +65,33 @@ MOVED = {dotted(old): dotted(new) for old, new in MOVES.items()}
 
 
 def find_package(root: Path) -> Path:
-    for candidate in (root / "src" / "wuwa_calculator", root / "wuwa_calculator"):
+    """Return find package."""
+    for candidate in (
+        root / "src" / "wuwa_calculator",
+        root / "wuwa_calculator",
+    ):
         if candidate.is_dir():
             return candidate
-    raise SystemExit("Não achei a pasta wuwa_calculator (rode na raiz do projeto).")
+    raise SystemExit(
+        "Não achei a pasta wuwa_calculator (rode na raiz do projeto)."
+    )
 
 
 def project_files(root: Path, suffixes: set[str]) -> list[Path]:
+    """Project files."""
     files = []
     for path in root.rglob("*"):
-        if path.is_file() and path.suffix in suffixes and not (SKIP_DIRS & set(path.relative_to(root).parts)):
+        if (
+            path.is_file()
+            and path.suffix in suffixes
+            and not (SKIP_DIRS & set(path.relative_to(root).parts))
+        ):
             files.append(path)
     return sorted(files)
 
 
 def relative_to_package(path: Path, package: Path) -> list[str] | None:
+    """Relative to package."""
     try:
         parts = list(path.relative_to(package).with_suffix("").parts)
     except ValueError:
@@ -73,8 +100,9 @@ def relative_to_package(path: Path, package: Path) -> list[str] | None:
 
 
 APP_PACKAGE_IMPORT = re.compile(
-    r"^(?P<indent>\s*)from\s+(?P<mod>\.+app|\.+|(?:src\.)?wuwa_calculator\.app|(?:src\.)?wuwa_calculator)"
-    r"\s+import\s+(?P<names>[^()#\n]+?)\s*$"
+    "^(?P<indent>\\s*)from\\s+(?P<mod>\\.+app|\\.+|(?:src\\.)?wuwa_calcula"
+    "tor\\.app|(?:src\\.)?wuwa_calculator)\\s+import\\s+(?P<names>[^()#\\n"
+    "]+?)\\s*$"
 )
 
 
@@ -90,10 +118,14 @@ def _relative(new_pkg: list[str], target: list[str]) -> str:
     return "." * (len(new_pkg) - common + 1) + ".".join(target[common:])
 
 
-def fix_package_imports(text: str, old_pkg: list[str] | None, new_pkg: list[str] | None) -> tuple[str, int]:
+def fix_package_imports(
+    text: str, old_pkg: list[str] | None, new_pkg: list[str] | None
+) -> tuple[str, int]:
     """`from . import native_engine`, `from ...app import native_engine` e
     `from wuwa_calculator.app import native_engine`: o pacote não mudou, mas o
     NOME importado foi para outro pacote. Divide a linha, uma por destino."""
+    # Keep the ordered CLI validation and execution pipeline together.
+    # pylint: disable=too-many-branches,too-many-locals
     changes = 0
     out = []
     for line in text.split("\n"):
@@ -102,7 +134,8 @@ def fix_package_imports(text: str, old_pkg: list[str] | None, new_pkg: list[str]
             out.append(line)
             continue
         mod = match.group("mod")
-        # pacote de onde os nomes são importados, em partes absolutas dentro do pacote
+        # pacote de onde os nomes são importados, em partes absolutas
+        # dentro do pacote
         if mod.startswith("."):
             dots = len(mod) - 3 if mod.endswith("app") else len(mod)
             if old_pkg is None or dots - 1 > len(old_pkg):
@@ -134,12 +167,15 @@ def fix_package_imports(text: str, old_pkg: list[str] | None, new_pkg: list[str]
 
         indent = match.group("indent")
         if keep:
-            # O que ficou em app/ continua em app/, mas o ARQUIVO pode ter mudado de pasta.
+            # O que ficou em app/ continua em app/, mas o ARQUIVO pode
+            # ter mudado de pasta.
             if style == "relative" and new_pkg is not None:
                 keep_from = _relative(new_pkg, ["app"])
             else:
                 keep_from = mod
-            out.append(f"{indent}from {keep_from} import {', '.join(keep)}{_DONE}")
+            out.append(
+                f"{indent}from {keep_from} import {', '.join(keep)}{_DONE}"
+            )
         for package_path, items in moved.items():
             parts = package_path.split(".")
             if style == "relative" and new_pkg is not None:
@@ -148,14 +184,21 @@ def fix_package_imports(text: str, old_pkg: list[str] | None, new_pkg: list[str]
                 where = "." + package_path
             else:
                 where = f"{prefix}.{package_path}"
-            out.append(f"{indent}from {where} import {', '.join(items)}{_DONE}")
+            out.append(
+                f"{indent}from {where} import {', '.join(items)}{_DONE}"
+            )
         changes += 1
     return "\n".join(out), changes
 
 
-def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None) -> tuple[str, int]:
+def fix_text(
+    text: str, old_parts: list[str] | None, new_parts: list[str] | None
+) -> tuple[str, int]:
     """Reescreve imports de um arquivo. `old_parts`/`new_parts`: caminho do
-    módulo dentro do pacote antes/depois da mudança (None se fora do pacote)."""
+    módulo dentro do pacote antes/depois da mudança (None se fora do pacote).
+    """
+    # Keep the ordered CLI validation and execution pipeline together.
+    # pylint: disable=too-many-locals
     changes = 0
 
     def absolute(match: re.Match) -> str:
@@ -166,8 +209,14 @@ def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None
         changes += 1
         return f"{match.group('prefix')}.{MOVED[old]}"
 
-    pattern = "|".join(re.escape(name) for name in sorted(MOVED, key=len, reverse=True))
-    text = re.sub(rf"(?P<prefix>(?:src\.)?wuwa_calculator)\.(?P<mod>{pattern})\b", absolute, text)
+    pattern = "|".join(
+        re.escape(name) for name in sorted(MOVED, key=len, reverse=True)
+    )
+    text = re.sub(
+        rf"(?P<prefix>(?:src\.)?wuwa_calculator)\.(?P<mod>{pattern})\b",
+        absolute,
+        text,
+    )
 
     text, extra = fix_package_imports(
         text,
@@ -207,7 +256,10 @@ def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None
             common += 1
         new_dots = len(new_pkg) - common + 1
         rest = ".".join(target_new[common:])
-        new_line = f"{match.group('indent')}from {'.' * new_dots}{rest} import {match.group('rest')}"
+        new_line = (
+            f"{match.group('indent')}from {'.' * new_dots}{rest} import"
+            f" {match.group('rest')}"
+        )
         if new_line != line:
             changes += 1
         out.append(new_line)
@@ -215,7 +267,12 @@ def fix_text(text: str, old_parts: list[str] | None, new_parts: list[str] | None
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    """Run the reorganize project command-line entry point."""
+    # Keep the ordered CLI validation and execution pipeline together.
+    # pylint: disable=too-many-branches,too-many-locals,too-many-statements
+    parser = argparse.ArgumentParser(
+        description=__doc__.split("\n\n", maxsplit=1)[0]
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
@@ -236,9 +293,12 @@ def main() -> int:
 
     print("Movimentos:" if plan else "Nada a mover.")
     for source, target in plan:
-        print(f"  {source.relative_to(package)}  ->  {target.relative_to(package)}")
+        print(
+            f"  {source.relative_to(package)}  -> "
+            f" {target.relative_to(package)}"
+        )
 
-    new_location = {source: target for source, target in plan}
+    new_location = dict(plan)
     total_changes = 0
     rewrites: list[tuple[Path, str, int]] = []
 
@@ -252,7 +312,10 @@ def main() -> int:
             rewrites.append((path, fixed, changes))
             total_changes += changes
 
-    print(f"\nImports a reescrever: {total_changes} em {len(rewrites)} arquivo(s)")
+    print(
+        f"\nImports a reescrever: {total_changes} em {len(rewrites)}"
+        " arquivo(s)"
+    )
     for path, _, changes in rewrites:
         print(f"  {path.relative_to(root)}: {changes}")
 
@@ -270,21 +333,50 @@ def main() -> int:
             init.write_text("", encoding="utf-8")
         done = False
         if use_git:
-            done = subprocess.run(["git", "mv", str(source), str(target)], cwd=root,
-                                  capture_output=True).returncode == 0
+            done = (
+                subprocess.run(
+                    ["git", "mv", str(source), str(target)],
+                    cwd=root,
+                    capture_output=True,
+                    check=False,
+                ).returncode
+                == 0
+            )
         if not done:
             shutil.move(str(source), str(target))
 
     # Referências que sobraram (fora dos .py ou em formas que não tratamos).
     leftovers = []
     names = [name.split(".")[-1] for name in MOVED]
-    old_ref = re.compile(r"\bapp[./\\](?:" + "|".join(names) + r")\b|from\s+\.+app\s+import")
-    for path in project_files(root, {".py", ".spec", ".toml", ".cfg", ".ini", ".txt", ".md", ".yml", ".yaml", ".json"}):
+    old_ref = re.compile(
+        r"\bapp[./\\](?:" + "|".join(names) + r")\b|from\s+\.+app\s+import"
+    )
+    for path in project_files(
+        root,
+        {
+            ".py",
+            ".spec",
+            ".toml",
+            ".cfg",
+            ".ini",
+            ".txt",
+            ".md",
+            ".yml",
+            ".yaml",
+            ".json",
+        },
+    ):
         if path.name == "reorganize_project.py":
             continue
-        for number, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
-            if old_ref.search(line) and not re.search(r"app\s+import\s+main\b", line):
-                leftovers.append(f"  {path.relative_to(root)}:{number}: {line.strip()}")
+        for number, line in enumerate(
+            path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1
+        ):
+            if old_ref.search(line) and not re.search(
+                r"app\s+import\s+main\b", line
+            ):
+                leftovers.append(
+                    f"  {path.relative_to(root)}:{number}: {line.strip()}"
+                )
     if leftovers:
         print("\nConfira manualmente (referências ao local antigo):")
         print("\n".join(leftovers))

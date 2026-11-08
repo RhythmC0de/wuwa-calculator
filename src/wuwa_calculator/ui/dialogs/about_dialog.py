@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,6 +32,8 @@ def _readme_path() -> Path:
 
 
 class AboutDialog(QDialog):
+    """Display application information and documentation links."""
+
     VERSION = VERSION
 
     def __init__(self, host: QWidget) -> None:
@@ -46,18 +48,16 @@ class AboutDialog(QDialog):
         layout.addWidget(TitleLabel("Tethys System"))
 
         description = QLabel(
-            "O Tethys System é o terminal central de Black Shores: "
-            "um sistema dedicado a observar, analisar e compreender o Lamento. "
-            "Nesta aplicação, seus cálculos são usados para estudar personagens, "
-            "equipes, rotações e dano em Wuthering Waves."
+            "O Tethys System é o terminal central de Black Shores: um sistema"
+            " dedicado a observar, analisar e compreender o Lamento. Nesta"
+            " aplicação, seus cálculos são usados para estudar personagens,"
+            " equipes, rotações e dano em Wuthering Waves."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
 
         info = QLabel(
-            f"Versão: {self.VERSION}\n"
-            "Sistema: Tethys System\n"
-            "Licença: MIT"
+            f"Versão: {self.VERSION}\nSistema: Tethys System\nLicença: MIT"
         )
         info.setObjectName("muted")
         info.setWordWrap(True)
@@ -99,10 +99,7 @@ class AboutDialog(QDialog):
         )
 
     def _copy_diagnostic(self) -> None:
-        diagnostic = (
-            f"Tethys System {self.VERSION}\n"
-            f"Diretório: {Path.cwd()}"
-        )
+        diagnostic = f"Tethys System {self.VERSION}\nDiretório: {Path.cwd()}"
         QApplication.clipboard().setText(diagnostic)
         QMessageBox.information(
             self,

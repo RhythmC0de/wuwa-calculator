@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, QTimer
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
-    QPushButton, QVBoxLayout, QWidget, QFrame, QSizePolicy,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
-
-from wuwa_calculator.ui.components.components import Card, TitleLabel
+from wuwa_calculator.ui.components.components import Card
 from wuwa_calculator.ui.panels.dps_simulation_panel import DpsSimulationPanel
 from wuwa_calculator.ui.panels.history_video_player import HistoryVideoPlayer
-
 
 EVENTS = (
     (15, "⚔", "Habilidade A", "Lançamento da habilidade básica."),
@@ -43,11 +48,19 @@ def _panel_title(text: str) -> QLabel:
 
 def _compact_width(widget: QWidget) -> None:
     widget.setMinimumWidth(0)
-    widget.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+    widget.setSizePolicy(
+        QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding
+    )
 
 
 class EventTimelinePanel(Card):
-    def __init__(self, video_player: HistoryVideoPlayer, parent: QWidget | None = None) -> None:
+    """Display damage events aligned with video timestamps."""
+
+    def __init__(
+        self, video_player: HistoryVideoPlayer, parent: QWidget | None = None
+    ) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         super().__init__(parent)
         self.event_rows: list[tuple[float, QFrame, QLabel]] = []
         layout = QVBoxLayout(self)
@@ -61,12 +74,23 @@ class EventTimelinePanel(Card):
         layout.addLayout(header)
         events_layout = QVBoxLayout()
         events_layout.setSpacing(5)
-        for event_index, (reference_timestamp, icon, title, description) in enumerate(EVENTS):
+        for event_index, (
+            reference_timestamp,
+            icon,
+            title,
+            description,
+        ) in enumerate(EVENTS):
             row = QFrame()
             row.setObjectName("eventRow")
-            category = "Ultimate" if "Ultimate" in title else "Buff" if "Buff" in title else "Skill"
+            category = (
+                "Ultimate"
+                if "Ultimate" in title
+                else "Buff" if "Buff" in title else "Skill"
+            )
             row.setProperty("category", category)
-            row.setProperty("stripe", "even" if event_index % 2 == 0 else "odd")
+            row.setProperty(
+                "stripe", "even" if event_index % 2 == 0 else "odd"
+            )
             row.setMinimumHeight(40)
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(8, 5, 8, 5)
@@ -116,7 +140,9 @@ class EventTimelinePanel(Card):
             scale = duration_seconds / reference_end if reference_end else 1.0
             self.event_rows = [
                 (reference_timestamp * scale, row, time_label)
-                for reference_timestamp, row, time_label in self._reference_event_rows
+                for reference_timestamp, row, time_label in (
+                    self._reference_event_rows
+                )
             ]
             for timestamp, _row, time_label in self.event_rows:
                 time_label.setText(_clock(round(timestamp * 1000)))
@@ -129,7 +155,14 @@ class EventTimelinePanel(Card):
     def _flush_position(self) -> None:
         self._position_timer.stop()
         seconds = self._pending_position_ms / 1000.0
-        active_timestamp = max((timestamp for timestamp, _row, _time_label in self.event_rows if timestamp <= seconds), default=-1)
+        active_timestamp = max(
+            (
+                timestamp
+                for timestamp, _row, _time_label in self.event_rows
+                if timestamp <= seconds
+            ),
+            default=-1,
+        )
         for timestamp, row, _time_label in self.event_rows:
             row.setProperty("active", timestamp == active_timestamp)
             row.style().unpolish(row)
@@ -137,7 +170,11 @@ class EventTimelinePanel(Card):
 
 
 class VideoInfoPanel(Card):
-    def __init__(self, video_player: HistoryVideoPlayer, parent: QWidget | None = None) -> None:
+    """Show metadata for the selected video."""
+
+    def __init__(
+        self, video_player: HistoryVideoPlayer, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
@@ -160,7 +197,13 @@ class VideoInfoPanel(Card):
         video_player.media_player.durationChanged.connect(self._set_duration)
 
     @staticmethod
-    def _add_metric(layout: QGridLayout, row_index: int, column: int, name: str, value: str | QLabel) -> None:
+    def _add_metric(
+        layout: QGridLayout,
+        row_index: int,
+        column: int,
+        name: str,
+        value: str | QLabel,
+    ) -> None:
         cell = QVBoxLayout()
         cell.setSpacing(0)
         label = QLabel(name)
@@ -177,19 +220,29 @@ class VideoInfoPanel(Card):
 
 
 class PlaybackOptionsPanel(Card):
-    def __init__(self, video_player: HistoryVideoPlayer, parent: QWidget | None = None) -> None:
+    """Controls for video playback options."""
+
+    def __init__(
+        self, video_player: HistoryVideoPlayer, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(5)
         layout.addWidget(_panel_title("Opções de reprodução"))
-        speed_combo = self._add_combo(layout, "Velocidade", ("1.0x", "0.5x", "1.5x", "2.0x"))
+        speed_combo = self._add_combo(
+            layout, "Velocidade", ("1.0x", "0.5x", "1.5x", "2.0x")
+        )
         speed_combo.currentTextChanged.connect(
-            lambda value: video_player.media_player.setPlaybackRate(float(value.rstrip("x")))
+            lambda value: video_player.media_player.setPlaybackRate(
+                float(value.rstrip("x"))
+            )
         )
 
     @staticmethod
-    def _add_combo(layout: QVBoxLayout, label_text: str, values: tuple[str, ...]) -> QComboBox:
+    def _add_combo(
+        layout: QVBoxLayout, label_text: str, values: tuple[str, ...]
+    ) -> QComboBox:
         row = QHBoxLayout()
         label = QLabel(label_text)
         label.setObjectName("optionLabel")
@@ -204,8 +257,13 @@ class PlaybackOptionsPanel(Card):
         layout.addLayout(row)
         return combo
 
+
 class VideoActionsPanel(Card):
-    def __init__(self, video_player: HistoryVideoPlayer, parent: QWidget | None = None) -> None:
+    """Actions for loading and analyzing a video."""
+
+    def __init__(
+        self, video_player: HistoryVideoPlayer, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self.video_player = video_player
         layout = QVBoxLayout(self)
@@ -236,12 +294,18 @@ class VideoActionsPanel(Card):
         if not self.video_player.video_path:
             self._set_status("Carregue um vídeo primeiro")
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Salvar captura", "captura.png", "PNG (*.png)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Salvar captura", "captura.png", "PNG (*.png)"
+        )
         if path and self.video_player.video_surface.grab().save(path):
             self._set_status("Captura salva")
 
     def _open_folder(self) -> None:
-        folder = str(Path(self.video_player.video_path).parent) if self.video_player.video_path else str(Path.home())
+        folder = (
+            str(Path(self.video_player.video_path).parent)
+            if self.video_player.video_path
+            else str(Path.home())
+        )
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
 
@@ -249,6 +313,8 @@ class MultimediaTab(QWidget):
     """Full glassmorphism workspace for video, DPS and rotation events."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 8)
@@ -259,21 +325,31 @@ class MultimediaTab(QWidget):
         protocol_layout.setContentsMargins(14, 9, 14, 9)
         protocol_layout.setSpacing(2)
         protocol_header = QHBoxLayout()
-        protocol_title = QLabel("[ TETHYS PROTOCOL // OBSERVATÓRIO DE FREQUÊNCIAS ]")
+        protocol_title = QLabel(
+            "[ TETHYS PROTOCOL // OBSERVATÓRIO DE FREQUÊNCIAS ]"
+        )
         protocol_title.setObjectName("frequencyProtocolTitle")
         protocol_header.addWidget(protocol_title)
         protocol_badge = QLabel(
-            "STATUS: Sincronizado com o Terminal Central // Dados descartados à Necroestrela"
+            "STATUS: Sincronizado com o Terminal Central // Dados descartados"
+            " à Necroestrela"
         )
         protocol_badge.setObjectName("frequencyProtocolBadge")
         protocol_badge.setWordWrap(False)
         protocol_badge.setMinimumHeight(28)
         protocol_badge.setMinimumWidth(430)
-        protocol_badge.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        protocol_header.addWidget(protocol_badge, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        protocol_badge.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        protocol_header.addWidget(
+            protocol_badge,
+            0,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+        )
         protocol_layout.addLayout(protocol_header)
         protocol_subtitle = QLabel(
-            "Mesa de Areia de Combate • Mapeando oscilações de ressonância e isolando ruídos."
+            "Mesa de Areia de Combate • Mapeando oscilações de ressonância e"
+            " isolando ruídos."
         )
         protocol_subtitle.setObjectName("frequencyProtocolSubtitle")
         protocol_layout.addWidget(protocol_subtitle)
@@ -338,9 +414,10 @@ class MultimediaTab(QWidget):
         super().closeEvent(event)
 
     def set_active(self, active: bool) -> None:
+        """Start or stop background updates as this tab becomes active."""
         if active:
             self.setUpdatesEnabled(True)
             return
-        self.dps_panel._stop_live_analysis()
+        self.dps_panel.stop_live_analysis()
         self.video_player.media_player.pause()
         self.setUpdatesEnabled(False)

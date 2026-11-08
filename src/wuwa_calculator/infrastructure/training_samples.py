@@ -1,14 +1,16 @@
 """Exemplos de treino gerados pela revisão do usuário (somente local).
 
-Cada decisão do usuário vira um exemplo rotulado: recortes PNG do número +
-os valores corretos. Nada sai da máquina; o conjunto serve para treinar, depois,
+Cada decisão do usuário vira um exemplo rotulado: recortes PNG do número
++
+os valores corretos. Nada sai da máquina; o conjunto serve para treinar,
+depois,
 um leitor de dígitos próprio (veja tools/train_digit_reader.py).
 
 Formato em disco (dentro de `root`):
-    samples.jsonl          uma linha JSON por exemplo (última linha do mesmo
+    samples.jsonl          uma linha JSON por exemplo (última linha do
+    mesmo
                            `id` vence, assim reprocessar não duplica)
-    images/<id>_<k>.png    recortes (k = instante do evento)
-"""
+    images/<id>_<k>.png    recortes (k = instante do evento)"""
 
 from __future__ import annotations
 
@@ -36,15 +38,21 @@ def default_training_dir() -> Path:
     """Pasta de dados do usuário (nunca dentro do diretório do programa)."""
     # TETHYS_HOME é o diretório de dados documentado no README;
     # TETHYS_DATA_DIR continua valendo como apelido antigo.
-    override = os.environ.get("TETHYS_HOME") or os.environ.get("TETHYS_DATA_DIR")
+    override = os.environ.get("TETHYS_HOME") or os.environ.get(
+        "TETHYS_DATA_DIR"
+    )
     if override:
         return Path(override).expanduser() / "training"
     if sys.platform.startswith("win"):
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        base = os.environ.get("LOCALAPPDATA") or str(
+            Path.home() / "AppData" / "Local"
+        )
     elif sys.platform == "darwin":
         base = str(Path.home() / "Library" / "Application Support")
     else:
-        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+        base = os.environ.get("XDG_DATA_HOME") or str(
+            Path.home() / ".local" / "share"
+        )
     name = "tethys" if sys.platform.startswith("linux") else "Tethys"
     return Path(base) / name / "training"
 
@@ -86,21 +94,27 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 @dataclass(frozen=True)
 class TrainingSample:
+    """Reviewed OCR label and associated image references."""
+
+    # Fields mirror the persisted or externally consumed data schema.
+    # pylint: disable=too-many-instance-attributes
     id: str
     session: str
     engine_value: int
     engine: dict
     kind: str
     parts: tuple[tuple[int, int], ...]  # (valor, cópias); vazio = descartado
-    images: tuple[str, ...]             # caminhos relativos a root
+    images: tuple[str, ...]  # caminhos relativos a root
     offsets: tuple[float, ...]
 
 
 class TrainingSampleStore:
+    """Persist and retrieve reviewed OCR training examples."""
+
     def __init__(self, root: Path | None = None) -> None:
         self.root = Path(root) if root is not None else default_training_dir()
 
-    # ------------------------------------------------------------------ escrita
+    # Escrita
     def save(
         self,
         session: str,
@@ -111,6 +125,8 @@ class TrainingSampleStore:
     ) -> str | None:
         """Grava um exemplo. Devolve o id, ou None se não há imagem válida
         (sem recorte não há o que treinar)."""
+        # Keep validation intermediates explicit in this parsing pipeline.
+        # pylint: disable=too-many-locals
         valid = [(k, png) for k, png in enumerate(crops) if _valid_png(png)]
         if not valid:
             return None
@@ -128,7 +144,9 @@ class TrainingSampleStore:
             "schema_version": SCHEMA_VERSION,
             "id": sample_id,
             "session": session,
-            "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "created_at": (
+                datetime.now().astimezone().isoformat(timespec="seconds")
+            ),
             "engine_value": event.damage,
             "engine": {
                 "confirmed": event.confirmed,
@@ -147,14 +165,17 @@ class TrainingSampleStore:
         }
 
         self.root.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+        line = (
+            json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+            + "\n"
+        )
         with open(self.root / SAMPLES_FILE, "a", encoding="utf-8") as handle:
             handle.write(line)
             handle.flush()
             os.fsync(handle.fileno())
         return sample_id
 
-    # ------------------------------------------------------------------ leitura
+    # Leitura
     def load(self) -> list[TrainingSample]:
         """Lê os exemplos, ignorando linhas corrompidas/inválidas."""
         path = self.root / SAMPLES_FILE
@@ -201,9 +222,12 @@ class TrainingSampleStore:
             return None
 
     def count(self) -> int:
+        """Return count."""
         return len(self.load())
 
     def labeled(self) -> Iterable[TrainingSample]:
         """Exemplos com rótulo útil (aceitos/corrigidos); descartes servem
         como 'não é dano' em outro treino."""
-        return (s for s in self.load() if s.kind != DecisionKind.DISCARDED.value)
+        return (
+            s for s in self.load() if s.kind != DecisionKind.DISCARDED.value
+        )

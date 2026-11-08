@@ -1,32 +1,36 @@
-"""Interactive DPS timeline synchronized with the native Tethys video player."""
+"""Interactive DPS timeline synchronized with the native Tethys video
+player."""
 
 from __future__ import annotations
 
-import math
-import sys
-import traceback
 from collections import defaultdict
-from threading import Lock
-from typing import Any
-from pathlib import Path
-
 
 import pyqtgraph as pg
-from PySide6.QtCore import QObject, QTime, QThread, QTimer, Qt, Signal
+from PySide6.QtCore import Qt, QThread, QTime, QTimer, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QMessageBox, QPushButton, QTimeEdit, QVBoxLayout, QWidget,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTimeEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 from wuwa_calculator.ui.components.components import Card
-
-
-ANALYSIS_BUCKET_SECONDS = 5.0
-INACTIVITY_TIMEOUT = 12.0
-MIN_INACTIVITY_ANALYSIS_SECONDS = 15.0
-OCR_SAMPLE_FPS = 8.0
+from wuwa_calculator.ui.workers.video_analysis_worker import (
+    ANALYSIS_BUCKET_SECONDS,
+    INACTIVITY_TIMEOUT,
+    MIN_INACTIVITY_ANALYSIS_SECONDS,
+    OCR_SAMPLE_FPS,
+    CvDamageAnalysisWorker,
+    LiveDamageAnalysisWorker,
+)
 
 
 class DpsPlotWidget(pg.PlotWidget):
+    """DPS plot that emits the timestamp selected by the user."""
+
     timestampClicked = Signal(float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -50,11 +54,19 @@ class DpsPlotWidget(pg.PlotWidget):
 
 
 class NumericAxis(pg.AxisItem):
+    # AxisItem provides SVG rendering through its graphics-item implementation.
+    # pylint: disable=abstract-method
+    """Format plot tick labels as grouped numeric values."""
+
     def tickStrings(self, values, scale, spacing):
         return [f"{value:,.0f}" for value in values]
 
 
 class TimelineAxis(pg.AxisItem):
+    # AxisItem provides SVG rendering through its graphics-item implementation.
+    # pylint: disable=abstract-method
+    """Format plot tick labels as minutes and seconds."""
+
     def tickStrings(self, values, scale, spacing):
         labels = []
         for value in values:
@@ -63,207 +75,25 @@ class TimelineAxis(pg.AxisItem):
         return labels
 
 
-class CvDamageAnalysisWorker(QObject):
-    progress = Signal(int)
-    finished = Signal(object, float)
-    failed = Signal(str)
-
-    def __init__(self, video_path: str, skip_seconds: float, block_seconds: float) -> None:
-        super().__init__()
-        self.video_path = video_path
-        self.skip_seconds = max(0.0, skip_seconds)
-        self.block_seconds = max(1.0, block_seconds)
-        self._cancelled = False
-
-    def cancel(self) -> None:
-        self._cancelled = True
-
-    def run(self) -> None:
-        import cv2
-
-        capture = cv2.VideoCapture(self.video_path, cv2.CAP_FFMPEG)
-        if not capture.isOpened():
-            self.failed.emit("Não foi possível abrir o vídeo para análise OpenCV")
-            return
-        try:
-            fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            duration = frame_count / fps if frame_count else 0.0
-            capture.set(cv2.CAP_PROP_POS_MSEC, self.skip_seconds * 1000.0)
-            buckets: defaultdict[int, float] = defaultdict(float)
-            recent_detections: dict[tuple[int, int, int], tuple[float, float]] = {}
-            frame_index = int(self.skip_seconds * fps)
-            last_progress = -1
-            while not self._cancelled:
-                success, frame = capture.read()
-                if not success:
-                    break
-                timestamp = frame_index / fps
-                for value, center_x, center_y in self._detect_damage_events(frame):
-                    signature = (center_x // 50, center_y // 30, value // 100)
-                    previous = recent_detections.get(signature)
-                    if previous and timestamp - previous[0] < 0.35:
-                        continue
-                    recent_detections[signature] = (timestamp, value)
-                    buckets[int(timestamp // self.block_seconds)] += value
-                frame_index += 1
-                if frame_count:
-                    progress = int(min(100, frame_index / frame_count * 100))
-                    if progress != last_progress:
-                        self.progress.emit(progress)
-                        last_progress = progress
-            if self._cancelled:
-                self.finished.emit([], duration)
-                return
-            end_time = max(duration, self.skip_seconds)
-            block_count = max(1, math.ceil(max(0.0, end_time - self.skip_seconds) / self.block_seconds))
-            results = []
-            accumulated = 0.0
-            for index in range(block_count):
-                damage = buckets.get(index + int(self.skip_seconds // self.block_seconds), 0.0)
-                accumulated += damage
-                timestamp = self.skip_seconds + (index + 1) * self.block_seconds
-                results.append((min(timestamp, end_time), damage / self.block_seconds, accumulated))
-            self.finished.emit(results, end_time)
-        except (OSError, RuntimeError, ValueError) as error:
-            self.failed.emit(f"Falha durante análise OpenCV: {error}")
-        finally:
-            capture.release()
-
-    @staticmethod
-    def _detect_damage_events(frame) -> list[tuple[int, int, int]]:
-        import cv2
-
-        height, width = frame.shape[:2]
-        crop = frame[int(height * 0.05):int(height * 0.65), int(width * 0.10):int(width * 0.90)]
-        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        bright_text = cv2.inRange(hsv, (0, 0, 180), (180, 125, 255))
-        warm_text = cv2.inRange(hsv, (5, 65, 130), (45, 255, 255))
-        mask = cv2.bitwise_or(bright_text, warm_text)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        components = []
-        for contour in contours:
-            x, y, item_width, item_height = cv2.boundingRect(contour)
-            area = cv2.contourArea(contour)
-            if area < 8 or item_width < 2 or item_height < 7:
-                continue
-            if item_width > 100 or item_height > 80 or item_width / max(1, item_height) > 4:
-                continue
-            components.append((x, y, item_width, item_height, area))
-        components.sort(key=lambda item: (item[1], item[0]))
-        groups: list[list[tuple[int, int, int, int, float]]] = []
-        for component in components:
-            x, y, item_width, item_height, _area = component
-            center_y = y + item_height / 2
-            if groups:
-                group = groups[-1]
-                group_center_y = sum(item[1] + item[3] / 2 for item in group) / len(group)
-                group_right = max(item[0] + item[2] for item in group)
-                if abs(center_y - group_center_y) <= max(12, item_height * 0.7) and x <= group_right + 28:
-                    group.append(component)
-                    continue
-            groups.append([component])
-        events = []
-        for group in groups:
-            left = min(item[0] for item in group)
-            right = max(item[0] + item[2] for item in group)
-            top = min(item[1] for item in group)
-            bottom = max(item[1] + item[3] for item in group)
-            group_width = right - left
-            group_height = bottom - top
-            if len(group) < 2 and group_width < 16:
-                continue
-            filled_area = sum(item[4] for item in group)
-            density = min(1.0, filled_area / max(1, group_width * group_height))
-            estimated_damage = int(min(9_999_999, max(100, group_width * group_height * (1.0 + density))))
-            events.append((estimated_damage, int(width * 0.10 + (left + right) / 2), int(height * 0.05 + (top + bottom) / 2)))
-        return events
-
-
-class LiveDamageAnalysisWorker(QObject):
-    """Executa a engine C++ nativa e publica seus eventos para a interface.
-
-    A detecção, OCR, filtragem, rastreamento e deduplicação pertencem à engine.
-    A análise roda em um processo separado, sem compartilhar bibliotecas com Qt.
-    Esta classe apenas adapta o resultado nativo aos sinais Qt já consumidos
-    pelo painel. O streaming incremental será adicionado na próxima etapa.
-    """
-    damage_detected = Signal(dict)
-    analysis_completed = Signal(dict)
-    failed = Signal(str)
-    finished = Signal()
-
-    def __init__(
-        self,
-        video_path: str,
-        skip_seconds: float,
-        end_seconds: float = 0.0,
-        start_time: float | None = None,
-    ) -> None:
-        super().__init__()
-        self.video_path = video_path
-        self.skip_seconds = max(0.0, skip_seconds)
-        self.end_seconds = max(0.0, end_seconds)
-        self.start_time = max(0.0, start_time if start_time is not None else skip_seconds)
-        self._cancelled = False
-
-    def update_position(self, seconds: float) -> None:
-        # Mantido por compatibilidade com o painel atual. A engine analisa o
-        # intervalo selecionado, sem depender da posição de reprodução.
-        return
-
-    def cancel(self) -> None:
-        self._cancelled = True
-
-    def run(self) -> None:
-        try:
-            if self._cancelled:
-                return
-
-            from wuwa_calculator.infrastructure.video_analysis import analyze_isolated
-
-            scan_start = max(self.skip_seconds, self.start_time)
-            data = analyze_isolated(
-                self.video_path, scan_start,
-                self.end_seconds if self.end_seconds > scan_start else -1.0,
-                lambda: self._cancelled,
-            )
-            if data is None or self._cancelled:
-                return
-
-            for event in data.pop("events"):
-                if self._cancelled:
-                    return
-                self.damage_detected.emit({
-                    **event, "hits": 1, "peak": event["damage"], "accumulated": 0.0,
-                })
-            self.analysis_completed.emit(data)
-        except Exception as error:
-            # Report unexpected pybind11/API errors too; otherwise the QThread can
-            # end without a useful message and the UI appears to do nothing.
-            details = traceback.format_exc()
-            self.failed.emit(
-                f"Falha na engine nativa ({type(error).__name__}): {error}\n\n{details}"
-            )
-        finally:
-            # Sempre emite: o QThread só encerra seu loop de eventos por este
-            # sinal. Cada worker está ligado ao seu próprio thread (veja
-            # _start_live_analysis), então um worker cancelado não afeta o novo.
-            self.finished.emit()
-
-
 class DpsSimulationPanel(Card):
-    def __init__(self, video_player: QWidget, parent: QWidget | None = None) -> None:
+    """Display analysis controls, damage curves, and review results."""
+
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
+    def __init__(
+        self, video_player: QWidget, parent: QWidget | None = None
+    ) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         super().__init__(parent)
         self.video_player = video_player
         self.duration_seconds = 163.0
         self._dps_start_time = 0.0
         self.live_thread: QThread | None = None
         self.live_worker: LiveDamageAnalysisWorker | None = None
-        self._live_blocks: defaultdict[int, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0])
+        self._live_blocks: defaultdict[int, list[float]] = defaultdict(
+            lambda: [0.0, 0.0, 0.0, 0.0]
+        )
         self._total_hits = 0
         self._peak_hit = 0
         self._hit_times: list[float] = []
@@ -302,7 +132,9 @@ class DpsSimulationPanel(Card):
         self.analysis_status.setObjectName("dpsAnalysisStatus")
         self.analysis_status.setWordWrap(True)
         self.analysis_status.setMinimumWidth(240)
-        self.analysis_status.setToolTip("Status e diagnósticos da análise nativa")
+        self.analysis_status.setToolTip(
+            "Status e diagnósticos da análise nativa"
+        )
         header.addWidget(self.analysis_status, 1)
         self.hit_label = QLabel("Hits: 0")
         self.hit_label.setObjectName("dpsCursorLabel")
@@ -375,9 +207,13 @@ class DpsSimulationPanel(Card):
             axis = self.plot.getPlotItem().getAxis(axis_name)
             axis.setPen(pg.mkPen("#6870A8"))
             axis.setTextPen(pg.mkPen("#C7C8EA"))
-        self.glow_curve = self.plot.plot([], [], pen=pg.mkPen((0, 217, 255, 70), width=7))
+        self.glow_curve = self.plot.plot(
+            [], [], pen=pg.mkPen((0, 217, 255, 70), width=7)
+        )
         self.curve = self.plot.plot([], [], pen=pg.mkPen("#00D9FF", width=2.5))
-        self.damage_glow_curve = pg.PlotDataItem(pen=pg.mkPen((61, 196, 255, 65), width=6))
+        self.damage_glow_curve = pg.PlotDataItem(
+            pen=pg.mkPen((61, 196, 255, 65), width=6)
+        )
         self.damage_curve = pg.PlotDataItem(pen=pg.mkPen("#55D6FF", width=2))
         self.damage_view.addItem(self.damage_glow_curve)
         self.damage_view.addItem(self.damage_curve)
@@ -421,8 +257,14 @@ class DpsSimulationPanel(Card):
         self.mini_plot.setClipToView(True)
         self.mini_plot.setDownsampling(auto=True, mode="peak")
         self.mini_plot.enableAutoRange(False)
-        self.mini_curve = self.mini_plot.plot([], [], pen=pg.mkPen((117, 75, 255, 120), width=2))
-        self.mini_markers = pg.ScatterPlotItem(size=7, brush=pg.mkBrush("#B77CFF"), pen=pg.mkPen("#FFFFFF", width=1))
+        self.mini_curve = self.mini_plot.plot(
+            [], [], pen=pg.mkPen((117, 75, 255, 120), width=2)
+        )
+        self.mini_markers = pg.ScatterPlotItem(
+            size=7,
+            brush=pg.mkBrush("#B77CFF"),
+            pen=pg.mkPen("#FFFFFF", width=1),
+        )
         self.mini_plot.addItem(self.mini_markers)
         layout.addWidget(self.plot, 1)
         layout.addWidget(self.mini_plot)
@@ -432,9 +274,11 @@ class DpsSimulationPanel(Card):
             self._queue_position,
             Qt.ConnectionType.QueuedConnection,
         )
-        self.video_player.media_player.durationChanged.connect(self._on_duration_changed)
+        self.video_player.media_player.durationChanged.connect(
+            self._on_duration_changed
+        )
         self.video_player.videoLoaded.connect(self._on_video_loaded)
-        self.video_player.videoStopped.connect(self._stop_live_analysis)
+        self.video_player.videoStopped.connect(self.stop_live_analysis)
         self._render_curve()
 
     @staticmethod
@@ -462,17 +306,21 @@ class DpsSimulationPanel(Card):
         self.damage_lows.setData([], [])
         self.mini_curve.setData([], [])
         self.mini_markers.setData([], [])
-        self.plot.setXRange(0, max(1.0, self.duration_seconds), padding=0.02)
-        self.plot.setYRange(0, 1, padding=0)
+        self.plot.getPlotItem().getViewBox().setXRange(
+            min=0, max=max(1.0, self.duration_seconds), padding=0.02
+        )
+        self.plot.getPlotItem().getViewBox().setYRange(min=0, max=1, padding=0)
         self.plot.showAxis("bottom", True)
         self.plot.showAxis("left", False)
         self.plot.showAxis("right", True)
-        self.plot.setTitle("Aguardando dano real do vídeo...", color="#A8A8D5", size="11pt")
+        self.plot.setTitle(
+            "Aguardando dano real do vídeo...", color="#A8A8D5", size="11pt"
+        )
         self.damage_metric.setText("Dano acumulado: --")
         self.hits_metric.setText("Hits: 0")
         self.dps_metric.setText("DPS médio: --")
         self.peak_metric.setText("Maior hit: --")
-        self.damage_view.setYRange(0, 100, padding=0)
+        self.damage_view.setYRange(min=0, max=100, padding=0)
         if self._dps_start_time >= 0:
             self._render_initial_analysis_point()
 
@@ -486,7 +334,9 @@ class DpsSimulationPanel(Card):
         )
 
     def _sync_damage_view(self) -> None:
-        self.damage_view.setGeometry(self.plot.getPlotItem().vb.sceneBoundingRect())
+        self.damage_view.setGeometry(
+            self.plot.getPlotItem().vb.sceneBoundingRect()
+        )
 
     def _set_plot_data(
         self,
@@ -519,21 +369,40 @@ class DpsSimulationPanel(Card):
         self.plot.setTitle("")
         self.plot.getAxis("left").setTicks(None)
         self.plot.getAxis("right").setTicks(None)
-        self.plot.setXRange(0, visible_duration, padding=0.02)
-        self.plot.setYRange(0, max(1.0, peak) * 1.12, padding=0)
-        self.damage_view.setYRange(0, max(100.0, total_damage) * 1.12, padding=0)
+        self.plot.getPlotItem().getViewBox().setXRange(
+            min=0, max=visible_duration, padding=0.02
+        )
+        self.plot.getPlotItem().getViewBox().setYRange(
+            min=0, max=max(1.0, peak) * 1.12, padding=0
+        )
+        self.damage_view.setYRange(
+            min=0, max=max(100.0, total_damage) * 1.12, padding=0
+        )
         self._sync_damage_view()
         self.mini_curve.setData(times, values)
-        visible_markers = [timestamp for timestamp in marker_times if timestamp <= visible_duration]
-        self.mini_markers.setData(x=visible_markers, y=[max(1.0, peak) * 0.5] * len(visible_markers))
-        self.mini_plot.setXRange(0, visible_duration, padding=0)
-        self.mini_plot.setYRange(0, max(1.0, peak), padding=0)
+        visible_markers = [
+            timestamp
+            for timestamp in marker_times
+            if timestamp <= visible_duration
+        ]
+        self.mini_markers.setData(
+            x=visible_markers, y=[max(1.0, peak) * 0.5] * len(visible_markers)
+        )
+        self.mini_plot.getPlotItem().getViewBox().setXRange(
+            min=0, max=visible_duration, padding=0
+        )
+        self.mini_plot.getPlotItem().getViewBox().setYRange(
+            min=0, max=max(1.0, peak), padding=0
+        )
 
     @staticmethod
     def _extreme_points(
         times: list[float], values: list[float]
     ) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
-        """Find local damage peaks and meaningful low points for chart markers."""
+        """
+        Find local damage peaks and meaningful low points for chart
+        markers.
+        """
         if len(values) < 3:
             return [], []
         peaks: list[tuple[float, float]] = []
@@ -546,9 +415,12 @@ class DpsSimulationPanel(Card):
             next_value = values[index + 1]
             if value <= 0:
                 continue
-            if value >= previous_value and value >= next_value and value > previous_value:
+            if previous_value < value >= next_value:
                 peaks.append((times[index], value))
-            if value <= previous_value and value <= next_value and value <= next_value and value <= floor * 1.15:
+            if all(
+                value <= bound
+                for bound in (previous_value, next_value, floor * 1.15)
+            ):
                 lows.append((times[index], value))
         if not peaks:
             highest_index = max(range(len(values)), key=values.__getitem__)
@@ -588,9 +460,15 @@ class DpsSimulationPanel(Card):
         )
         self._observed_damage = running_total
         last_observed_time = self._live_blocks[maximum_block][2]
-        elapsed = max(0.0, min(last_observed_time, analysis_end or last_observed_time) - analysis_start)
+        elapsed = max(
+            0.0,
+            min(last_observed_time, analysis_end or last_observed_time)
+            - analysis_start,
+        )
         self._observed_dps = self._observed_damage / max(0.1, elapsed)
-        self.damage_metric.setText(f"Dano acumulado: {self._observed_damage:,.0f}")
+        self.damage_metric.setText(
+            f"Dano acumulado: {self._observed_damage:,.0f}"
+        )
         self.hits_metric.setText(f"Hits: {self._total_hits}")
         self.dps_metric.setText(f"DPS médio: {self._observed_dps:,.0f}")
         self.peak_metric.setText(f"Maior hit: {self._peak_hit:,.0f}")
@@ -599,7 +477,10 @@ class DpsSimulationPanel(Card):
         self._start_live_analysis(video_path)
 
     def _analysis_start_seconds(self) -> float:
-        """Return the manual video timestamp where live analysis should begin."""
+        """
+        Return the manual video timestamp where live analysis should
+        begin.
+        """
         return self._time_to_seconds(self.analysis_start_time)
 
     def _scan_start_seconds(self) -> float:
@@ -619,7 +500,7 @@ class DpsSimulationPanel(Card):
 
     def _toggle_live_analysis(self) -> None:
         if self.live_worker is not None:
-            self._stop_live_analysis()
+            self.stop_live_analysis()
             return
         video_path = getattr(self.video_player, "video_path", "")
         if video_path:
@@ -628,7 +509,7 @@ class DpsSimulationPanel(Card):
             self.analysis_status.setText("Carregue um vídeo primeiro")
 
     def _start_live_analysis(self, video_path: str) -> None:
-        self._stop_live_analysis()
+        self.stop_live_analysis()
         self._dps_start_time = self._analysis_start_seconds()
         self._plot_update_timer.stop()
         self._plot_dirty = False
@@ -675,46 +556,60 @@ class DpsSimulationPanel(Card):
     def _on_analysis_completed(self, data: dict) -> None:
         last_hit = float(data.get("last_hit", -1.0))
         native_hits = int(data.get("total_hits", self._total_hits) or 0)
-        native_damage = float(data.get("total_damage", self._observed_damage) or 0.0)
+        native_damage = float(
+            data.get("total_damage", self._observed_damage) or 0.0
+        )
         native_peak = float(data.get("peak_damage", self._peak_hit) or 0.0)
 
         if last_hit >= 0:
             self.cutoff_line.setValue(last_hit)
             self.cutoff_line.show()
 
-        # Use the engine's authoritative totals even when it returned no events.
-        # Previously, the metric labels were only updated by _render_live_blocks(),
+        # Use the engine's authoritative totals even when it returned no
+        # events.
+        # Previously, the metric labels were only updated by
+        # _render_live_blocks(),
         # which returns immediately when _live_blocks is empty.
         self.damage_metric.setText(f"Dano acumulado: {native_damage:,.0f}")
         self.hits_metric.setText(f"Hits: {native_hits}")
         self.peak_metric.setText(f"Maior hit: {native_peak:,.0f}")
 
         duration = float(data.get("duration", 0.0) or 0.0)
-        elapsed = max(0.0, last_hit - self._dps_start_time) if last_hit >= 0 else 0.0
+        elapsed = (
+            max(0.0, last_hit - self._dps_start_time) if last_hit >= 0 else 0.0
+        )
         if elapsed <= 0:
             elapsed = max(0.0, duration - self._dps_start_time)
         average_dps = native_damage / elapsed if elapsed > 0 else 0.0
         self.dps_metric.setText(f"DPS médio: {average_dps:,.0f}")
 
         if native_hits > 0:
+            last_hit_label = (
+                self._clock_seconds(last_hit) if last_hit >= 0 else "--:--"
+            )
             self.analysis_status.setText(
-                f"Engine C++ concluída · {native_hits} hits · "
-                f"{native_damage:,.0f} de dano · último hit "
-                f"{self._clock_seconds(last_hit) if last_hit >= 0 else '--:--'}"
+                "Engine C++ concluída · "
+                f"{native_hits}"
+                " hits · "
+                f"{native_damage:,.0f}"
+                " de dano · último hit "
+                f"{last_hit_label}"
             )
         else:
             self.analysis_status.setText(
-                "Análise concluída, mas a engine não reconheceu nenhum hit. "
-                f"Frames: {data.get('frames_analyzed', 0)} · "
-                f"Candidatos: {data.get('candidates_detected', 0)} · "
-                f"Rejeitados (HUD): {data.get('candidates_rejected_hud', 0)} · "
-                f"Rejeitados (formato): {data.get('candidates_rejected_geometry', 0)} · "
-                f"Passaram filtros: {data.get('candidates_passed_filters', 0)} · "
-                f"Chamadas OCR: {data.get('ocr_calls', 0)} · "
-                f"OCR sem número: {data.get('ocr_no_numeric_result', 0)} · "
-                f"Confiança rejeitada: {data.get('ocr_rejected_confidence', 0)} · "
-                f"Contagem regressiva ignorada: {data.get('ocr_ignored_countdown', 0)} · "
-                f"Abaixo do dano mínimo: {data.get('ocr_below_min_damage', 0)}"
+                "Análise concluída, mas a engine não reconheceu nenhum hit."
+                f" Frames: {data.get('frames_analyzed', 0)} · Candidatos:"
+                f" {data.get('candidates_detected', 0)} · Rejeitados (HUD):"
+                f" {data.get('candidates_rejected_hud', 0)} · Rejeitados"
+                f" (formato): {data.get('candidates_rejected_geometry', 0)} ·"
+                " Passaram filtros:"
+                f" {data.get('candidates_passed_filters', 0)} · Chamadas OCR:"
+                f" {data.get('ocr_calls', 0)} · OCR sem número:"
+                f" {data.get('ocr_no_numeric_result', 0)} · Confiança"
+                f" rejeitada: {data.get('ocr_rejected_confidence', 0)} ·"
+                " Contagem regressiva ignorada:"
+                f" {data.get('ocr_ignored_countdown', 0)} · Abaixo do dano"
+                f" mínimo: {data.get('ocr_below_min_damage', 0)}"
             )
 
         self._plot_dirty = True
@@ -731,7 +626,9 @@ class DpsSimulationPanel(Card):
         if timestamp < self._dps_start_time:
             return
         block_seconds = ANALYSIS_BUCKET_SECONDS
-        block_index = int(max(0.0, timestamp - self._dps_start_time) // block_seconds)
+        block_index = int(
+            max(0.0, timestamp - self._dps_start_time) // block_seconds
+        )
         block = self._live_blocks[block_index]
         block[0] += damage
         block[1] += hits
@@ -745,7 +642,9 @@ class DpsSimulationPanel(Card):
         if not self._plot_update_timer.isActive():
             self._plot_update_timer.start()
         self.hit_label.setText(f"Hits: {self._total_hits}")
-        self.analysis_status.setText(f"Ao vivo {self._clock_seconds(timestamp)}")
+        self.analysis_status.setText(
+            f"Ao vivo {self._clock_seconds(timestamp)}"
+        )
 
     def _flush_plot_update(self) -> None:
         if not self._plot_dirty:
@@ -760,9 +659,11 @@ class DpsSimulationPanel(Card):
         return f"{total // 60}:{total % 60:02d}"
 
     def _on_live_failed(self, message: str) -> None:
-        # Do not call _stop_live_analysis() here: it overwrites this error with
+        # Do not call stop_live_analysis() here: it overwrites this error with
         # "Análise ao vivo parada", hiding the actual cause from the user.
-        self.analysis_status.setText("Falha na análise nativa. Veja os detalhes.")
+        self.analysis_status.setText(
+            "Falha na análise nativa. Veja os detalhes."
+        )
         self.analysis_status.setToolTip(message)
         self.analyze_button.setText("Análise ao vivo")
         QMessageBox.critical(
@@ -784,7 +685,8 @@ class DpsSimulationPanel(Card):
             self.analyze_button.setText("Análise ao vivo")
 
     def shutdown_analysis(self) -> None:
-        """Cancela a engine e espera o thread terminar (chamado ao fechar a janela)."""
+        """Cancela a engine e espera o thread terminar (chamado ao fechar a
+        janela)."""
         thread = self.live_thread
         if self.live_worker is not None:
             self.live_worker.cancel()
@@ -792,7 +694,8 @@ class DpsSimulationPanel(Card):
             thread.quit()
             thread.wait(15000)
 
-    def _stop_live_analysis(self) -> None:
+    def stop_live_analysis(self) -> None:
+        """Cancel the active analysis and wait for its worker to finish."""
         if self.live_worker is not None:
             self.live_worker.cancel()
             self.analysis_status.setText("Análise ao vivo parada")
@@ -818,4 +721,20 @@ class DpsSimulationPanel(Card):
             self.live_worker.update_position(seconds)
 
     def _seek_video(self, seconds: float) -> None:
-        self.video_player.seek_to_seconds(max(0.0, min(self.duration_seconds, seconds)))
+        self.video_player.seek_to_seconds(
+            max(0.0, min(self.duration_seconds, seconds))
+        )
+
+
+__all__ = [
+    "DpsPlotWidget",
+    "NumericAxis",
+    "TimelineAxis",
+    "DpsSimulationPanel",
+    "ANALYSIS_BUCKET_SECONDS",
+    "CvDamageAnalysisWorker",
+    "INACTIVITY_TIMEOUT",
+    "LiveDamageAnalysisWorker",
+    "MIN_INACTIVITY_ANALYSIS_SECONDS",
+    "OCR_SAMPLE_FPS",
+]

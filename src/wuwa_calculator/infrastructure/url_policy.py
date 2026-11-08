@@ -7,24 +7,34 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 # Reviewed image/data hosts. Exact match or a subdomain of the entry.
-ALLOWED_REMOTE_HOSTS: frozenset[str] = frozenset({
-    "rackoon.com.br",
-    "wuwalab.com",
-    "i.imgur.com",
-    "wuwatracker.com",                    # banner catalog + icons
-    "gist.githubusercontent.com",         # banner JSON
-})
+ALLOWED_REMOTE_HOSTS: frozenset[str] = frozenset(
+    {
+        "rackoon.com.br",
+        "wuwalab.com",
+        "i.imgur.com",
+        "wuwatracker.com",  # banner catalog + icons
+        "gist.githubusercontent.com",  # banner JSON
+    }
+)
 
 # Hosts that receive the player's gacha-record parameters (POST). Kept apart on
 # purpose: image hosts must never receive those credentials.
-GACHA_API_HOST_SUFFIXES: tuple[str, ...] = ("aki-game2.com", "aki-game2.net", "kurogames.com")
+GACHA_API_HOST_SUFFIXES: tuple[str, ...] = (
+    "aki-game2.com",
+    "aki-game2.net",
+    "kurogames.com",
+)
 
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".bmp"})
 
 
-def _host_matches(host: str, allowed: tuple[str, ...] | frozenset[str]) -> bool:
+def _host_matches(
+    host: str, allowed: tuple[str, ...] | frozenset[str]
+) -> bool:
     host = host.casefold().rstrip(".")
-    return any(host == entry or host.endswith("." + entry) for entry in allowed)
+    return any(
+        host == entry or host.endswith("." + entry) for entry in allowed
+    )
 
 
 def _is_ip_literal(host: str) -> bool:
@@ -36,7 +46,12 @@ def _is_ip_literal(host: str) -> bool:
 
 
 def _https_ok(url: object) -> tuple[bool, str]:
-    if not isinstance(url, str) or not url or len(url) > 2048 or any(c in url for c in "\r\n\t "):
+    if (
+        not isinstance(url, str)
+        or not url
+        or len(url) > 2048
+        or any(c in url for c in "\r\n\t ")
+    ):
         return False, ""
     try:
         parts = urlsplit(url)
@@ -52,21 +67,29 @@ def _https_ok(url: object) -> tuple[bool, str]:
 
 
 def allows_remote_content(url: object) -> bool:
+    """Whether the URL is HTTPS on an approved image/data host."""
     ok, host = _https_ok(url)
     return ok and _host_matches(host, ALLOWED_REMOTE_HOSTS)
 
 
 def allows_gacha_api(url: object) -> bool:
+    """Whether the URL targets an approved pull-history endpoint."""
     ok, host = _https_ok(url)
     return ok and _host_matches(host, GACHA_API_HOST_SUFFIXES)
 
 
-def allows_local_image(path: str, *, roots: tuple[Path, ...] | None = None) -> bool:
+def allows_local_image(
+    path: str, *, roots: tuple[Path, ...] | None = None
+) -> bool:
     """Bundled (``:/``) or image files that resolve inside an approved root."""
     if path.startswith(":/"):
         return True
     package_root = Path(__file__).resolve().parent.parent
-    approved = roots if roots is not None else (package_root, package_root.parent.parent / "Assets")
+    approved = (
+        roots
+        if roots is not None
+        else (package_root, package_root.parent.parent / "Assets")
+    )
     candidate = Path(path)
     if not candidate.is_absolute():
         candidate = package_root / candidate

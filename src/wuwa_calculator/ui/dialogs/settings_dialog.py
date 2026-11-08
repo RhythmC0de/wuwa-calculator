@@ -9,6 +9,8 @@ from wuwa_calculator.ui.tabs.settings_tab import SettingsTab
 
 
 class SettingsDialog(QDialog):
+    """Modal wrapper for application preferences."""
+
     def __init__(self, host: QWidget) -> None:
         super().__init__(host)
         self.setWindowTitle("Configurações | Tethys")

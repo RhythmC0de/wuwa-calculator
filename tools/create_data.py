@@ -1,7 +1,8 @@
-from pathlib import Path
+"""Create local character data files from the command line."""
+
 import json
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "src" / "wuwa_calculator" / "data"
@@ -18,6 +19,7 @@ CHARACTER_SKILLS = (
 
 
 def write_json(path: Path, data: dict) -> None:
+    """Write json."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
     with path.open("w", encoding="utf-8") as file:
@@ -27,6 +29,7 @@ def write_json(path: Path, data: dict) -> None:
 
 
 def create_character(character_id: str) -> None:
+    """Create character."""
     character_dir = DATA / "characters"
 
     data_dir = character_dir / "data" / character_id
@@ -46,8 +49,7 @@ def create_character(character_id: str) -> None:
         "weapon_type": None,
         "base_stats": {},
         "skills": {
-            skill: f"{character_id}/{skill}"
-            for skill in CHARACTER_SKILLS
+            skill: f"{character_id}/{skill}" for skill in CHARACTER_SKILLS
         },
     }
 
@@ -74,6 +76,7 @@ def create_character(character_id: str) -> None:
 
 
 def main() -> None:
+    """Run the create data command-line entry point."""
     if len(sys.argv) != 3:
         print("Usage:")
         print("  python tools/create_data.py character <character_id>")

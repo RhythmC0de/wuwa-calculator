@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
-import json
-import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Iterable
 from urllib.parse import parse_qs, urlsplit
 
 from PySide6.QtCore import (
-    QEasingCurve,
     Property,
-    QPropertyAnimation,
+    QEasingCurve,
     QObject,
+    QPropertyAnimation,
     QRectF,
-    QThread,
+    QSize,
     Qt,
+    QThread,
     QUrl,
     Signal,
     Slot,
@@ -27,7 +25,11 @@ from PySide6.QtGui import (
     QPainterPath,
     QPixmap,
 )
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtNetwork import (
+    QNetworkAccessManager,
+    QNetworkReply,
+    QNetworkRequest,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -43,16 +45,27 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-
 from wuwa_calculator.infrastructure.safe_http import post_json
-from wuwa_calculator.infrastructure.url_policy import allows_gacha_api, allows_remote_content
+from wuwa_calculator.infrastructure.url_policy import (
+    allows_gacha_api,
+    allows_remote_content,
+)
+from wuwa_calculator.ui.rendering import (
+    apply_alpha_mask,
+    draw_centered,
+    smooth_scaled,
+    transparent_pixmap,
+)
 from wuwa_calculator.ui.styles.styles import wallpaper_palette
+
 EVENT_RESONATOR_BANNER_URL = "https://i.imgur.com/JrRW9Bt.jpeg"
 SIGNATURE_WEAPON_BANNER_URL = "https://i.imgur.com/metoowt.jpeg"
 
 
 @dataclass
 class PityState:
+    """Current pull counters and banner selections."""
+
     resonator: int | None = None
     weapon: int | None = None
     standard_character: int | None = None
@@ -63,6 +76,8 @@ class PityState:
 
 
 class PityHistoryImportWorker(QObject):
+    """Import pull history without blocking the interface."""
+
     imported = Signal(object)
     failed = Signal(str)
 
@@ -72,27 +87,50 @@ class PityHistoryImportWorker(QObject):
 
     @Slot()
     def run(self) -> None:
+        """Execute the worker and emit its result or failure signal."""
         try:
-            query = parse_qs(urlsplit(self.history_url).fragment.split("?", 1)[-1])
-            params = {key: values[-1] for key, values in query.items() if values}
+            query = parse_qs(
+                urlsplit(self.history_url).fragment.split("?", 1)[-1]
+            )
+            params = {
+                key: values[-1] for key, values in query.items() if values
+            }
             host = urlsplit(self.history_url).hostname or ""
             endpoint = f"https://{host}/aki/gacha/record/query"
             if not allows_gacha_api(endpoint):
-                raise ValueError("Host do histórico não é um servidor oficial do jogo.")
+                raise ValueError(
+                    "Host do histórico não é um servidor oficial do jogo."
+                )
             records: list[dict[str, object]] = []
             for page in range(1, 21):
                 body = {**params, "page": page, "size": 20}
-                payload = post_json(endpoint, body, timeout=10, check=allows_gacha_api)
-                data = payload.get("data", payload) if isinstance(payload, dict) else {}
-                page_records = data.get("list", data.get("records", [])) if isinstance(data, dict) else []
+                payload = post_json(
+                    endpoint, body, timeout=10, check=allows_gacha_api
+                )
+                data = (
+                    payload.get("data", payload)
+                    if isinstance(payload, dict)
+                    else {}
+                )
+                page_records = (
+                    data.get("list", data.get("records", []))
+                    if isinstance(data, dict)
+                    else []
+                )
                 if not isinstance(page_records, list) or not page_records:
                     break
-                records.extend(item for item in page_records if isinstance(item, dict))
+                records.extend(
+                    item for item in page_records if isinstance(item, dict)
+                )
                 if len(page_records) < 20:
                     break
             if not records:
-                raise ValueError("Nenhum registro foi retornado pela URL do histórico.")
+                raise ValueError(
+                    "Nenhum registro foi retornado pela URL do histórico."
+                )
             self.imported.emit(records)
+        # Thread boundary: relay every worker failure through its Qt signal.
+        # pylint: disable-next=broad-exception-caught
         except Exception as error:
             self.failed.emit(str(error))
 
@@ -105,6 +143,7 @@ class PityTrackerWorker(QObject):
 
     @Slot(list)
     def ingest_items(self, items: list[object]) -> None:
+        """Ingest items."""
         if items:
             self.new_pull_captured.emit(items)
             self.shot_captured.emit({"items": items})
@@ -142,31 +181,29 @@ class _BannerArtLabel(QLabel):
         self._fit_entire = fit_entire
 
     def set_backdrop(self, color: str) -> None:
+        """Update the backdrop color used behind the artwork."""
         self._backdrop = QColor(color)
         self.update()
 
     def set_art(self, pixmap: QPixmap) -> None:
+        """Replace the displayed artwork and request a repaint."""
         self._source = pixmap
         self.update()
 
     def resizeEvent(self, event) -> None:
-        mask = QPixmap(self.size())
-        mask.fill(Qt.GlobalColor.transparent)
+        mask = transparent_pixmap(self.size())
         painter = QPainter(mask)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), self.CORNER_RADIUS, self.CORNER_RADIUS)
+        path.addRoundedRect(
+            QRectF(self.rect()), self.CORNER_RADIUS, self.CORNER_RADIUS
+        )
         painter.fillPath(path, Qt.GlobalColor.white)
         painter.end()
-        self.setMask(
-            mask.createMaskFromColor(
-                QColor(Qt.GlobalColor.transparent),
-                Qt.MaskMode.MaskInColor,
-            )
-        )
+        apply_alpha_mask(self, mask)
         super().resizeEvent(event)
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
         if self._source.isNull() or self.width() <= 0 or self.height() <= 0:
@@ -208,15 +245,17 @@ class _ConveneBannerCard(QFrame):
         super().__init__(parent)
         self.setObjectName("conveneBannerCard")
         self.setFixedHeight(82)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 9, 10, 9)
         layout.setSpacing(10)
         backdrop = (
-            "#2A1945" if accent == "#A855F7"
-            else "#302817" if accent == "#EAB308"
-            else "#111521"
+            "#2A1945"
+            if accent == "#A855F7"
+            else "#302817" if accent == "#EAB308" else "#111521"
         )
         self.art = _BannerArtLabel(self, backdrop, fit_entire)
         self.art.setFixedSize(*art_size)
@@ -229,7 +268,9 @@ class _ConveneBannerCard(QFrame):
 
         self.overlay = QFrame(self)
         self.overlay.setObjectName("conveneBannerOverlay")
-        self.overlay.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.overlay.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         overlay_layout = QVBoxLayout(self.overlay)
         overlay_layout.setContentsMargins(0, 0, 0, 0)
         overlay_layout.setSpacing(0)
@@ -255,16 +296,23 @@ class _ConveneBannerCard(QFrame):
         layout.addWidget(self.overlay, 1)
 
     def set_pity(self, value: int | None) -> None:
+        """Set pity."""
         display = value if value is not None else "--"
         self.pity_label.setText(f"{display} / 80")
 
     def set_badges(self, values: list[str]) -> None:
+        """Set badges."""
         self.badge.setText(values[0] if values else "")
 
 
 class PityTrackerWidget(QFrame):
-    """Glassmorphism tracker. Feed authorized pull data through capture_pull."""
+    """
+    Glassmorphism tracker. Feed authorized pull data through
+    capture_pull.
+    """
 
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
     new_pull_captured = Signal(list)
     sync_log_clicked = Signal()
     view_history_clicked = Signal()
@@ -304,22 +352,31 @@ class PityTrackerWidget(QFrame):
         self._pulse_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def _build_large_banner_ui(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         self.setStyleSheet(
-            "QFrame#pityTracker { background: #0F1118; border: 1px solid #292D38; border-radius: 16px; }"
-            "QFrame#conveneBannerCard { background: #161822; border: 1px solid #2B2F3B; border-radius: 12px; }"
-            "QLabel#conveneBannerCategory { font-size: 9px; font-weight: 700; }"
-            "QLabel#conveneBannerTitle { color: #F5F3FA; font-size: 16px; font-weight: 700; }"
-            "QLabel#conveneBannerPity { color: #C8A8FF; font-size: 18px; font-weight: 700; }"
-            "QLabel#conveneBannerBadge { color: #B995FF; background: transparent; border: 1px solid #3B2859; border-radius: 16px; padding: 3px 8px; font-size: 9px; font-weight: 700; }"
-            "QLabel#pityHeader { color: #D7D4DD; font-size: 13px; font-weight: 700; letter-spacing: 1px; }"
-            "QLabel#pityOnline { color: #70C987; font-size: 10px; }"
-            "QLabel#pityMeta { color: #A6A4AF; font-size: 9px; }"
-            "QLabel#pityStatIcon { color: #C4C0CD; font-size: 18px; }"
-            "QLabel#pityStatValue { color: #C4C0CD; font-size: 10px; }"
-            "QPushButton#pityIconButton { color: #D9D7DF; background: transparent; border: 0; font-size: 21px; padding: 0; }"
-            "QPushButton#pityIconButton:hover { color: #B995FF; }"
-            "QPushButton#pityFooter { color: #B995FF; background: #171A22; border: 1px solid #2D303A; border-radius: 10px; padding: 8px; font-size: 11px; font-weight: 700; }"
-            "QPushButton#pityFooter:hover { background: #20202D; border-color: #8D61D4; }"
+            "QFrame#pityTracker { background: #0F1118; border: 1px solid"
+            " #292D38; border-radius: 16px; }QFrame#conveneBannerCard {"
+            " background: #161822; border: 1px solid #2B2F3B; border-radius:"
+            " 12px; }QLabel#conveneBannerCategory { font-size: 9px;"
+            " font-weight: 700; }QLabel#conveneBannerTitle { color: #F5F3FA;"
+            " font-size: 16px; font-weight: 700; }QLabel#conveneBannerPity {"
+            " color: #C8A8FF; font-size: 18px; font-weight: 700;"
+            " }QLabel#conveneBannerBadge { color: #B995FF; background:"
+            " transparent; border: 1px solid #3B2859; border-radius: 16px;"
+            " padding: 3px 8px; font-size: 9px; font-weight: 700;"
+            " }QLabel#pityHeader { color: #D7D4DD; font-size: 13px;"
+            " font-weight: 700; letter-spacing: 1px; }QLabel#pityOnline {"
+            " color: #70C987; font-size: 10px; }QLabel#pityMeta { color:"
+            " #A6A4AF; font-size: 9px; }QLabel#pityStatIcon { color: #C4C0CD;"
+            " font-size: 18px; }QLabel#pityStatValue { color: #C4C0CD;"
+            " font-size: 10px; }QPushButton#pityIconButton { color: #D9D7DF;"
+            " background: transparent; border: 0; font-size: 21px; padding: 0;"
+            " }QPushButton#pityIconButton:hover { color: #B995FF;"
+            " }QPushButton#pityFooter { color: #B995FF; background: #171A22;"
+            " border: 1px solid #2D303A; border-radius: 10px; padding: 8px;"
+            " font-size: 11px; font-weight: 700; }QPushButton#pityFooter:hover"
+            " { background: #20202D; border-color: #8D61D4; }"
         )
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 13, 14, 13)
@@ -372,7 +429,11 @@ class PityTrackerWidget(QFrame):
         self.standard_character = self.standard_card.pity_label
         self.standard_weapon = QLabel()
 
-        for card in (self.resonator_card, self.weapon_card, self.standard_card):
+        for card in (
+            self.resonator_card,
+            self.weapon_card,
+            self.standard_card,
+        ):
             root.addWidget(card)
 
         self.history_row = QHBoxLayout()
@@ -380,7 +441,11 @@ class PityTrackerWidget(QFrame):
         self.footer_stats.hide()
         stats = QHBoxLayout()
         stats.setSpacing(0)
-        stat_values = (("◷", "Last Update", "--"), ("◇", "Total de Giros", "--"), ("✧", "Next Pity Milestone", "--"))
+        stat_values = (
+            ("◷", "Last Update", "--"),
+            ("◇", "Total de Giros", "--"),
+            ("✧", "Next Pity Milestone", "--"),
+        )
         for index, (icon, label, value) in enumerate(stat_values):
             column = QVBoxLayout()
             column.setSpacing(0)
@@ -422,24 +487,31 @@ class PityTrackerWidget(QFrame):
         theme_accent: str | None = None,
     ) -> None:
         """Apply wallpaper-derived colors to every tracker surface."""
+        # Keep the established call signature used by existing callers.
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         accent = theme_accent or accent
         self._palette_accent = accent
         self.setStyleSheet(
             self.styleSheet()
-            + f"QFrame#pityTracker {{ background: {panel}; border-color: {border}; }}"
-            f"QFrame#conveneBannerCard {{ background: {surface}; border-color: {border}; }}"
-            f"QLabel#conveneBannerCategory, QLabel#conveneBannerPity, "
-            f"QLabel#conveneBannerBadge, QPushButton#pityIconButton, "
-            f"QPushButton#pityFooter, QLabel#pityOnline {{ color: {accent}; }}"
-            f"QLabel#pityMeta {{ color: {muted}; }}"
-            f"QLabel#pityStatValue {{ color: {muted}; }}"
-            f"QLabel#conveneBannerBadge {{ border-color: {border}; }}"
-            f"QPushButton#pityFooter {{ background: {surface}; border-color: {border}; }}"
+            + f"QFrame#pityTracker {{ background: {panel}; border-color:"
+            f" {border}; }}QFrame#conveneBannerCard {{ background:"
+            f" {surface}; border-color: {border};"
+            " }QLabel#conveneBannerCategory, QLabel#conveneBannerPity,"
+            " QLabel#conveneBannerBadge, QPushButton#pityIconButton,"
+            f" QPushButton#pityFooter, QLabel#pityOnline {{ color: {accent};"
+            f" }}QLabel#pityMeta {{ color: {muted}; }}QLabel#pityStatValue"
+            f" {{ color: {muted}; }}QLabel#conveneBannerBadge {{"
+            f" border-color: {border}; }}QPushButton#pityFooter {{"
+            f" background: {surface}; border-color: {border}; }}"
         )
         self.resonator_card.category_label.setStyleSheet(f"color: {accent};")
         self.weapon_card.category_label.setStyleSheet(f"color: {accent};")
         self.standard_card.category_label.setStyleSheet(f"color: {accent};")
-        for card in (self.resonator_card, self.weapon_card, self.standard_card):
+        for card in (
+            self.resonator_card,
+            self.weapon_card,
+            self.standard_card,
+        ):
             card.art.set_backdrop(panel)
             effect = card.art.graphicsEffect()
             if isinstance(effect, QGraphicsDropShadowEffect):
@@ -449,34 +521,38 @@ class PityTrackerWidget(QFrame):
         self._refresh_labels()
 
     def _build_ui(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-statements
         self.setStyleSheet(
-            "QFrame#pityTracker { background: rgba(15, 17, 26, 224); "
-            "border: 1px solid rgba(168, 85, 247, 215); border-radius: 16px; }"
-            "QFrame#pityTile { background: rgba(9, 12, 22, 120); "
-            "border: 1px solid rgba(6, 182, 212, 130); border-radius: 10px; }"
-            "QLabel#pityCardTitle { color: #FFFFFF; font-size: 9px; font-weight: 900; }"
-            "QLabel#pityValue { color: #FFFFFF; font-size: 22px; font-weight: 900; "
-            "padding: 0; min-height: 27px; }"
-            "QLabel#pityResonatorAvatar, QLabel#pityWeaponAvatar { background: rgba(8, 10, 18, 220); "
-            "border-radius: 18px; padding: 1px; }"
-            "QLabel#pityStandardIcon { color: #7DD3FC; background: rgba(14, 165, 233, 35); "
-            "border: 1px solid #38BDF8; border-radius: 18px; padding: 1px; }"
-            "QLabel#pityBadge { color: #9DEBFF; background: rgba(6, 182, 212, 35); "
-            "border: 1px solid rgba(6, 182, 212, 130); border-radius: 9px; "
-            "padding: 4px 8px; font-size: 9px; font-weight: 900; }"
-            "QLabel#pitySubtitle { color: #10b981; font-size: 10px; font-weight: 800; }"
-            "QLabel#pityMeta { color: #C9C6D9; font-size: 9px; }"
-            "QLabel#pityHistory { color: #E7D7FF; font-size: 9px; }"
-            "QPushButton#pityIconButton { color: #CFEFFF; background: rgba(9, 20, 35, 180); "
-            "border: 1px solid rgba(96, 165, 250, 150); border-radius: 8px; "
-            "font-size: 14px; font-weight: 900; padding: 0; }"
-            "QPushButton#pityIconButton:hover, QPushButton#pityFooter:hover { "
-            "background: rgba(6, 182, 212, 55); border-color: #7DEBFF; }"
-            "QPushButton#pityFooter { color: #CFEFFF; background: rgba(9, 20, 35, 180); "
-            "border: 1px solid rgba(6, 182, 212, 120); border-radius: 8px; "
-            "padding: 6px 8px; font-size: 9px; font-weight: 800; }"
-            "QLabel#pityHistoryBadge { color: #F8E7FF; background: rgba(168, 85, 247, 90); "
-            "border: 1px solid #A855F7; border-radius: 10px; font-size: 8px; font-weight: 900; }"
+            "QFrame#pityTracker { background: rgba(15, 17, 26, 224); border:"
+            " 1px solid rgba(168, 85, 247, 215); border-radius: 16px;"
+            " }QFrame#pityTile { background: rgba(9, 12, 22, 120); border: 1px"
+            " solid rgba(6, 182, 212, 130); border-radius: 10px;"
+            " }QLabel#pityCardTitle { color: #FFFFFF; font-size: 9px;"
+            " font-weight: 900; }QLabel#pityValue { color: #FFFFFF; font-size:"
+            " 22px; font-weight: 900; padding: 0; min-height: 27px;"
+            " }QLabel#pityResonatorAvatar, QLabel#pityWeaponAvatar {"
+            " background: rgba(8, 10, 18, 220); border-radius: 18px; padding:"
+            " 1px; }QLabel#pityStandardIcon { color: #7DD3FC; background:"
+            " rgba(14, 165, 233, 35); border: 1px solid #38BDF8;"
+            " border-radius: 18px; padding: 1px; }QLabel#pityBadge { color:"
+            " #9DEBFF; background: rgba(6, 182, 212, 35); border: 1px solid"
+            " rgba(6, 182, 212, 130); border-radius: 9px; padding: 4px 8px;"
+            " font-size: 9px; font-weight: 900; }QLabel#pitySubtitle { color:"
+            " #10b981; font-size: 10px; font-weight: 800; }QLabel#pityMeta {"
+            " color: #C9C6D9; font-size: 9px; }QLabel#pityHistory { color:"
+            " #E7D7FF; font-size: 9px; }QPushButton#pityIconButton { color:"
+            " #CFEFFF; background: rgba(9, 20, 35, 180); border: 1px solid"
+            " rgba(96, 165, 250, 150); border-radius: 8px; font-size: 14px;"
+            " font-weight: 900; padding: 0; }QPushButton#pityIconButton:hover,"
+            " QPushButton#pityFooter:hover { background: rgba(6, 182, 212,"
+            " 55); border-color: #7DEBFF; }QPushButton#pityFooter { color:"
+            " #CFEFFF; background: rgba(9, 20, 35, 180); border: 1px solid"
+            " rgba(6, 182, 212, 120); border-radius: 8px; padding: 6px 8px;"
+            " font-size: 9px; font-weight: 800; }QLabel#pityHistoryBadge {"
+            " color: #F8E7FF; background: rgba(168, 85, 247, 90); border: 1px"
+            " solid #A855F7; border-radius: 10px; font-size: 8px; font-weight:"
+            " 900; }"
         )
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 9)
@@ -515,7 +591,9 @@ class PityTrackerWidget(QFrame):
         pity_grid.setHorizontalSpacing(6)
         pity_grid.setVerticalSpacing(6)
 
-        self.resonator_card = self._make_pity_tile("RESONATOR", "pityResonatorAvatar")
+        self.resonator_card = self._make_pity_tile(
+            "RESONATOR", "pityResonatorAvatar"
+        )
         self.resonator_avatar = QLabel(self.resonator_card)
         self.resonator_avatar.setObjectName("pityResonatorAvatar")
         self.resonator_avatar.setGeometry(108, 28, 36, 36)
@@ -545,8 +623,12 @@ class PityTrackerWidget(QFrame):
         self.weapon_progress.setGeometry(10, 61, 94, 5)
         pity_grid.addWidget(self.weapon_card, 0, 1)
 
-        self.standard_character_card = self._make_pity_tile("STD CHAR", "pityStandardIcon")
-        self.standard_character_icon = QLabel("◆", self.standard_character_card)
+        self.standard_character_card = self._make_pity_tile(
+            "STD CHAR", "pityStandardIcon"
+        )
+        self.standard_character_icon = QLabel(
+            "◆", self.standard_character_card
+        )
         self.standard_character_icon.setObjectName("pityStandardIcon")
         self.standard_character_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.standard_character_icon.setGeometry(108, 28, 36, 36)
@@ -557,7 +639,9 @@ class PityTrackerWidget(QFrame):
         self.standard_character.setGeometry(10, 27, 94, 29)
         pity_grid.addWidget(self.standard_character_card, 1, 0)
 
-        self.standard_weapon_card = self._make_pity_tile("STD WEAPON", "pityStandardIcon")
+        self.standard_weapon_card = self._make_pity_tile(
+            "STD WEAPON", "pityStandardIcon"
+        )
         self.standard_weapon_icon = QLabel("◆", self.standard_weapon_card)
         self.standard_weapon_icon.setObjectName("pityStandardIcon")
         self.standard_weapon_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -591,7 +675,7 @@ class PityTrackerWidget(QFrame):
         self._refresh_labels()
 
     @staticmethod
-    def _make_pity_tile(title: str, avatar_name: str) -> QFrame:
+    def _make_pity_tile(title: str, _avatar_name: str) -> QFrame:
         tile = QFrame()
         tile.setObjectName("pityTile")
         tile.setFixedHeight(94)
@@ -615,7 +699,9 @@ class PityTrackerWidget(QFrame):
             return
         reply = self.image_network.get(QNetworkRequest(QUrl(url)))
         self._image_replies[url] = reply
-        reply.finished.connect(lambda: self._finish_banner_image(reply, url, target))
+        reply.finished.connect(
+            lambda: self._finish_banner_image(reply, url, target)
+        )
 
     def _finish_banner_image(
         self,
@@ -644,7 +730,9 @@ class PityTrackerWidget(QFrame):
         reply = self.image_network.get(QNetworkRequest(QUrl(url)))
         self._image_replies[url] = reply
         reply.finished.connect(
-            lambda: self._finish_image(reply, url, target, width, height, border_color)
+            lambda: self._finish_image(
+                reply, url, target, width, height, border_color
+            )
         )
 
     def _finish_image(
@@ -656,6 +744,8 @@ class PityTrackerWidget(QFrame):
         height: int,
         border_color: str | None,
     ) -> None:
+        # Keep the established call signature used by existing callers.
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         try:
             pixmap = QPixmap()
             pixmap.loadFromData(bytes(reply.readAll()))
@@ -663,29 +753,27 @@ class PityTrackerWidget(QFrame):
                 target.setPixmap(self._circular_pixmap(pixmap, width, height))
                 if border_color:
                     target.setStyleSheet(
-                        f"border: 1px solid {border_color}; border-radius: {width // 2}px;"
+                        f"border: 1px solid {border_color}; border-radius:"
+                        f" {width // 2}px;"
                     )
         finally:
             self._image_replies.pop(url, None)
 
     @staticmethod
     def _circular_pixmap(source: QPixmap, width: int, height: int) -> QPixmap:
-        scaled = source.scaled(
+        scaled = smooth_scaled(
+            source,
             width,
             height,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
         )
-        canvas = QPixmap(width, height)
-        canvas.fill(Qt.GlobalColor.transparent)
+        canvas = transparent_pixmap(QSize(width, height))
         painter = QPainter(canvas)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         path = QPainterPath()
         path.addEllipse(0, 0, width, height)
         painter.setClipPath(path)
-        x = (width - scaled.width()) // 2
-        y = (height - scaled.height()) // 2
-        painter.drawPixmap(x, y, scaled)
+        draw_centered(painter, scaled, width, height)
         painter.end()
         return canvas
 
@@ -698,7 +786,8 @@ class PityTrackerWidget(QFrame):
         progress.setFixedHeight(5)
         return progress
 
-    pulseValue = Property(float, lambda self: self._pulse_value, lambda self, value: self._set_pulse(value))
+    def _get_pulse(self) -> float:
+        return self._pulse_value
 
     def _set_pulse(self, value: float) -> None:
         self._pulse_value = value
@@ -707,37 +796,48 @@ class PityTrackerWidget(QFrame):
             effect.setBlurRadius(8 + value * 22)
             effect.setColor(QColor(6, 182, 212, int(100 + value * 150)))
 
+    pulseValue = Property(float, _get_pulse, _set_pulse)
+
     def _refresh_labels(self) -> None:
-        resonator = self.state.resonator if self.state.resonator is not None else "--"
-        weapon = self.state.weapon if self.state.weapon is not None else "--"
-        standard_character = (
-            self.state.standard_character
-            if self.state.standard_character is not None else "--"
-        )
         standard_weapon = (
             self.state.standard_weapon
-            if self.state.standard_weapon is not None else "--"
+            if self.state.standard_weapon is not None
+            else "--"
         )
         self.resonator_card.set_pity(self.state.resonator)
         self.weapon_card.set_pity(self.state.weapon)
         self.standard_card.set_pity(self.state.standard_character)
         guarantee = (
-            "50/50: Garantido" if self.state.guaranteed is True
-            else "50/50: Ativo" if self.state.guaranteed is False
-            else "50/50: --"
+            "50/50: Garantido"
+            if self.state.guaranteed is True
+            else (
+                "50/50: Ativo"
+                if self.state.guaranteed is False
+                else "50/50: --"
+            )
         )
-        recent = self.state.five_star_history[-1] if self.state.five_star_history else "--"
-        self.resonator_card.set_badges([guarantee, f"5★ Recente: {recent} pulls"])
+        recent = (
+            self.state.five_star_history[-1]
+            if self.state.five_star_history
+            else "--"
+        )
+        self.resonator_card.set_badges(
+            [guarantee, f"5★ Recente: {recent} pulls"]
+        )
         self.weapon_card.set_badges([f"5★ Recente: {recent} pulls"])
         self.standard_card.set_badges([f"Arma: {standard_weapon} / 80"])
         self.standard_weapon.setText(f"Arma: {standard_weapon} / 80")
         total = self.state.total_registered or "--"
         self.footer_stats.setText(f"Total registrado no banco: {total} tiros")
         self.total_pulls_value.setText(
-            f"{self.state.total_registered:,}" if self.state.total_registered else "--"
+            f"{self.state.total_registered:,}"
+            if self.state.total_registered
+            else "--"
         )
         current_pity = self.state.resonator
-        next_pity = max(0, 80 - current_pity) if current_pity is not None else None
+        next_pity = (
+            max(0, 80 - current_pity) if current_pity is not None else None
+        )
         self.next_pity_value.setText(
             f"In {next_pity} pulls" if next_pity is not None else "--"
         )
@@ -785,8 +885,9 @@ class PityTrackerWidget(QFrame):
         color = self._palette_accent
         progress.setValue(current)
         progress.setStyleSheet(
-            "QProgressBar { background: rgba(255,255,255,18); border: 0; border-radius: 2px; }"
-            f"QProgressBar::chunk {{ background: {color}; border-radius: 2px; }}"
+            "QProgressBar { background: rgba(255,255,255,18); border: 0;"
+            " border-radius: 2px; }QProgressBar::chunk { background:"
+            f" {color}; border-radius: 2px; }}"
         )
 
     def _start_import(self) -> None:
@@ -811,7 +912,11 @@ class PityTrackerWidget(QFrame):
         five_stars: list[int] = []
         for record in reversed(records):
             pity += 1
-            rarity = record.get("quality", record.get("rarity", 0)) if isinstance(record, dict) else 0
+            rarity = (
+                record.get("quality", record.get("rarity", 0))
+                if isinstance(record, dict)
+                else 0
+            )
             try:
                 if int(rarity) >= 5:
                     five_stars.append(pity)
@@ -851,9 +956,11 @@ class PityTrackerWidget(QFrame):
         self._pulse_animation.start()
 
     def bind_worker(self, worker: PityTrackerWorker) -> None:
+        """Connect captured pull records from an import worker."""
         worker.shot_captured.connect(self.capture_shot)
 
     def capture_shot(self, shot: dict[str, object]) -> None:
+        """Forward captured pull records into the tracker state."""
         items = shot.get("items", [])
         if isinstance(items, list):
             self.capture_pull(items)

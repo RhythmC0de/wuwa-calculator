@@ -1,62 +1,137 @@
-""" Weapons database. """
+"""Weapons database."""
 
-# * EDITAVEL: adicione o nome da arma no mapa do personagem e o texto em MANUAL_WEAPONS.
+# * EDITAVEL: adicione o nome da arma no mapa do personagem e o texto em
+# MANUAL_WEAPONS.
 
 _LOCAL_KIT_WEAPON_NAMES = {
-    "aalto": "The Last Dance", "aemeath": "Everbright Polestar", "augusta": "Thunderflare Dominion", "baizhi": "Stellar Symphony",
-    "brant": "Unflickering Valor", "buling": "Stellar Symphony", "calcharo": "Lustrous Razor",
-    "camellya": "Red Spring", "cantarella": "Whispers of Sirens", "carlotta": "The Last Dance",
-    "cartethyia": "Defier's Thorn", "changli": "Blazing Brilliance", "chisa": "Kumokiri",
-    "chixia": "The Last Dance", "ciaccona": "Woodland Aria", "danjin": "Blazing Brilliance",
-    "denia": "Forged Dwarf Star", "encore": "Stringmaster", "galbrena": "Lux Umbra",
-    "hiyuki": "Frostburn", "iuno": "Moongazer's Sigil", "jianxin": "Verity's Handle",
-    "jinhsi": "Ages of Harvest", "jiyan": "Verdant Summit", "jingran": "Thousandfold Deliverance",
-    "lingyang": "Abyss Surges", "lucilla": "Freeze Frame", "lucy": "Spectral Trigger",
-    "lumi": "Lustrous Razor", "lupa": "Wildfire Mark", "luuk herssen": "Daybreaker's Spine",
-    "lynae": "Spectrum Blaster", "mornye": "Starfield Calibrator", "mortefi": "Static Mist",
-    "phrolova": "Lethean Elegy", "phoebe": "Luminous Hymn", "qingxiao": "Glint of Clouds",
-    "qiuyuan": "Signature Weapon", "rebecca": "Skull Thrasher", "roccia": "Tragicomedy",
-    "rover": "Emerald of Genesis", "rover aero": "Emerald of Genesis", "rover electro": "Blazing Brilliance",
-    "rover fusion": "Emerald of Genesis", "rover glacio": "Emerald of Genesis", "rover havoc": "Emerald of Genesis",
-    "rover spectro": "Emerald of Genesis", "sanhua": "Emerald of Genesis", "shorekeeper": "Stellar Symphony",
-    "sigrika": "Solsworn Ciphers", "suisui": "Firstlight's Herald", "taoqi": "Dauntless Evernight", "verina": "Stellar Symphony",
-    "xiangli yao": "Verity's Handle", "xuanling": "Azure Oath", "yangyang": "Jianxin's Signature Weapon",
-    "yangyang xuanling": "Azure Oath", "yinlin": "Stringmaster", "youhu": "Abyss Surges", "yuanwu": "Ages of Harvest", "zani": "Blazing Justice", "zhezhi": "Rime-Draped Sprouts",
+    "aalto": "The Last Dance",
+    "aemeath": "Everbright Polestar",
+    "augusta": "Thunderflare Dominion",
+    "baizhi": "Stellar Symphony",
+    "brant": "Unflickering Valor",
+    "buling": "Stellar Symphony",
+    "calcharo": "Lustrous Razor",
+    "camellya": "Red Spring",
+    "cantarella": "Whispers of Sirens",
+    "carlotta": "The Last Dance",
+    "cartethyia": "Defier's Thorn",
+    "changli": "Blazing Brilliance",
+    "chisa": "Kumokiri",
+    "chixia": "The Last Dance",
+    "ciaccona": "Woodland Aria",
+    "danjin": "Blazing Brilliance",
+    "denia": "Forged Dwarf Star",
+    "encore": "Stringmaster",
+    "galbrena": "Lux Umbra",
+    "hiyuki": "Frostburn",
+    "iuno": "Moongazer's Sigil",
+    "jianxin": "Verity's Handle",
+    "jinhsi": "Ages of Harvest",
+    "jiyan": "Verdant Summit",
+    "jingran": "Thousandfold Deliverance",
+    "lingyang": "Abyss Surges",
+    "lucilla": "Freeze Frame",
+    "lucy": "Spectral Trigger",
+    "lumi": "Lustrous Razor",
+    "lupa": "Wildfire Mark",
+    "luuk herssen": "Daybreaker's Spine",
+    "lynae": "Spectrum Blaster",
+    "mornye": "Starfield Calibrator",
+    "mortefi": "Static Mist",
+    "phrolova": "Lethean Elegy",
+    "phoebe": "Luminous Hymn",
+    "qingxiao": "Glint of Clouds",
+    "qiuyuan": "Signature Weapon",
+    "rebecca": "Skull Thrasher",
+    "roccia": "Tragicomedy",
+    "rover": "Emerald of Genesis",
+    "rover aero": "Emerald of Genesis",
+    "rover electro": "Blazing Brilliance",
+    "rover fusion": "Emerald of Genesis",
+    "rover glacio": "Emerald of Genesis",
+    "rover havoc": "Emerald of Genesis",
+    "rover spectro": "Emerald of Genesis",
+    "sanhua": "Emerald of Genesis",
+    "shorekeeper": "Stellar Symphony",
+    "sigrika": "Solsworn Ciphers",
+    "suisui": "Firstlight's Herald",
+    "taoqi": "Dauntless Evernight",
+    "verina": "Stellar Symphony",
+    "xiangli yao": "Verity's Handle",
+    "xuanling": "Azure Oath",
+    "yangyang": "Jianxin's Signature Weapon",
+    "yangyang xuanling": "Azure Oath",
+    "yinlin": "Stringmaster",
+    "youhu": "Abyss Surges",
+    "yuanwu": "Ages of Harvest",
+    "zani": "Blazing Justice",
+    "zhezhi": "Rime-Draped Sprouts",
 }
-# Manual weapon overrides. Add the verified PT-BR and EN text for each character ID.
+# Manual weapon overrides. Add the verified PT-BR and EN text for each
+# character ID.
 MANUAL_WEAPONS: dict[str, dict[str, any]] = {
     "suisui": {
         "name": "Firstlight's Herald",
-        "PT-BR": """ATQ BASE (NV. 90): 412
-REGEN. DE ENERGIA: 76.9%
-
-## PASSIVA
-Coroa de Primavera
-
-O HP Máx. aumenta em 12%. Ao ativar a Liberação da Ressonância, restaura 8 de Energia de Concerto a si mesmo, podendo ser ativado uma vez a cada 20s. Cada vez que aplicar a Esfoladura Criogênica, obtém Mácula de Neve por 6s; cada vez que causar Cura, obtém Marolas por 6s. Se o próprio Ressonante tiver aplicado a Esfoladura Criogênica e causado Cura enquanto estiver em campo, a próxima Habilidade Outro concederá os efeitos Mácula de Neve e Marolas por 6s. Quando o próprio Ressonante possuir Mácula de Neve e Marolas simultaneamente, o ATQ de todos os Ressonantes próximos na equipe aumenta em 20%. Efeitos de mesmo nome não se acumulam.""",
-        "EN": """BASE ATK (LV. 90): 412
-ENERGY REGEN: 76.9%
-
-## PASSIVE
-Crown of Spring
-
-Max HP increases by 12%. When Resonance Liberation is activated, restores 8 Concerto Energy to the wielder, which can be triggered once every 20s. Each time Glacio Chafe is applied, gains Snow Taint for 6s; each time healing is dealt, gains Ripples for 6s. If the wielder applies Glacio Chafe and deals healing while on the field, the next Outro Skill grants Snow Taint and Ripples for 6s. When the wielder has both Snow Taint and Ripples, the ATK of nearby team Resonators increases by 20%. Effects with the same name do not stack.""",
+        "PT-BR": (
+            "ATQ BASE (NV. 90): 412\n"
+            "REGEN. DE ENERGIA: 76.9%\n"
+            "\n"
+            "## PASSIVA\n"
+            "Coroa de Primavera\n"
+            "\n"
+            "O HP Máx. aumenta em 12%. Ao ativar a Liberação da "
+            "Ressonância, restaura 8 de Energia de Concerto a si mesmo, "
+            "podendo ser ativado uma vez a cada 20s. Cada vez que aplicar "
+            "a Esfoladura Criogênica, obtém Mácula de Neve por 6s; cada "
+            "vez que causar Cura, obtém Marolas por 6s. Se o próprio "
+            "Ressonante tiver aplicado a Esfoladura Criogênica e causado "
+            "Cura enquanto estiver em campo, a próxima Habilidade Outro "
+            "concederá os efeitos Mácula de Neve e Marolas por 6s. Quando "
+            "o próprio Ressonante possuir Mácula de Neve e Marolas "
+            "simultaneamente, o ATQ de todos os Ressonantes próximos na "
+            "equipe aumenta em 20%. Efeitos de mesmo nome não se acumulam."
+        ),
+        "EN": (
+            "BASE ATK (LV. 90): 412\n"
+            "ENERGY REGEN: 76.9%\n"
+            "\n"
+            "## PASSIVE\n"
+            "Crown of Spring\n"
+            "\n"
+            "Max HP increases by 12%. When Resonance Liberation is "
+            "activated, restores 8 Concerto Energy to the wielder, which "
+            "can be triggered once every 20s. Each time Glacio Chafe is "
+            "applied, gains Snow Taint for 6s; each time healing is "
+            "dealt, gains Ripples for 6s. If the wielder applies Glacio "
+            "Chafe and deals healing while on the field, the next Outro "
+            "Skill grants Snow Taint and Ripples for 6s. When the wielder "
+            "has both Snow Taint and Ripples, the ATK of nearby team "
+            "Resonators increases by 20%. Effects with the same name do "
+            "not stack."
+        ),
     },
     "verina": {
         "name": "Variation",
-        "PT-BR": """ATQ BASE (NV. 90): 412 
-REGEN. DE ENERGIA: 77.0% 
-
-## PASSIVA 
-Ária Incessante
-
-Ao lançar a Habilidade de Ressonância, restaura 8 de Energia de Concerto. Este efeito pode ser ativado 1 vez(es) a cada 20s.""",
-        "EN": """BASE ATK (LV. 90): 412 
-ENERGY REGEN: 76.9% 
-
-## PASSIVE 
-Ceaseless Aria
-
-When Resonance Skill is cast, restore 8 Concerto Energy. This effect can be triggered 1 time(s) every 20s.""",
+        "PT-BR": (
+            "ATQ BASE (NV. 90): 412 \n"
+            "REGEN. DE ENERGIA: 77.0% \n"
+            "\n"
+            "## PASSIVA \n"
+            "Ária Incessante\n"
+            "\n"
+            "Ao lançar a Habilidade de Ressonância, restaura 8 de Energia "
+            "de Concerto. Este efeito pode ser ativado 1 vez(es) a cada "
+            "20s."
+        ),
+        "EN": (
+            "BASE ATK (LV. 90): 412 \n"
+            "ENERGY REGEN: 76.9% \n"
+            "\n"
+            "## PASSIVE \n"
+            "Ceaseless Aria\n"
+            "\n"
+            "When Resonance Skill is cast, restore 8 Concerto Energy. "
+            "This effect can be triggered 1 time(s) every 20s."
+        ),
     },
 }

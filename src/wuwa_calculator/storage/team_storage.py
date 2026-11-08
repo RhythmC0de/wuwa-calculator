@@ -13,24 +13,37 @@ from wuwa_calculator.storage.paths import migrate_legacy_file, user_data_dir
 
 TEAMS_FILE = user_data_dir() / "teams.json"
 DEFAULT_TEAMS: list[dict[str, Any]] = [
-    {"name": "Fusion quickswap", "status": "Not started", "characters": ["Augusta", "Brant", "Shorekeeper"]},
+    {
+        "name": "Fusion quickswap",
+        "status": "Not started",
+        "characters": ["Augusta", "Brant", "Shorekeeper"],
+    },
     {"name": "Glacio control", "status": "Not started", "characters": []},
     {"name": "Aero burst", "status": "Not started", "characters": []},
 ]
 
 
 def _defaults() -> list[dict[str, Any]]:
-    return [{**team, "characters": list(team["characters"])} for team in DEFAULT_TEAMS]
+    return [
+        {**team, "characters": list(team["characters"])}
+        for team in DEFAULT_TEAMS
+    ]
 
 
 def load_teams(path: Path = TEAMS_FILE) -> list[dict[str, Any]]:
+    """Load saved team configurations from the configured file."""
     if path == TEAMS_FILE:
         migrate_legacy_file("teams.json", path)
     value = read_json(path, None)
     if not isinstance(value, list):
         return _defaults()
-    return [team for team in value if isinstance(team, dict) and str(team.get("name", "")).strip()]
+    return [
+        team
+        for team in value
+        if isinstance(team, dict) and str(team.get("name", "")).strip()
+    ]
 
 
 def save_teams(teams: list[dict[str, Any]], path: Path = TEAMS_FILE) -> None:
+    """Save teams."""
     write_json(path, teams)

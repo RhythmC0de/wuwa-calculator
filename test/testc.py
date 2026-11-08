@@ -1,4 +1,8 @@
-from wuwa_calculator.native.damage_analyzer  import damage_analyzer
+"""test/testc.py"""
+
+from wuwa_calculator.infrastructure.native_engine import load_engine
+
+damage_analyzer = load_engine()
 
 result = damage_analyzer.analyze_video(
     "teste.mp4",

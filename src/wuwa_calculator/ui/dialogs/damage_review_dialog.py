@@ -58,6 +58,8 @@ class DamageReviewDialog(QDialog):
     decide o que fazer com elas.
     """
 
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         queue: Sequence[HitEvent],
@@ -65,6 +67,8 @@ class DamageReviewDialog(QDialog):
         parent: QWidget | None = None,
         initial: Mapping[int, ReviewDecision] | None = None,
     ) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-statements
         super().__init__(parent)
         self._queue = list(queue)
         self._crops = crops
@@ -192,7 +196,8 @@ class DamageReviewDialog(QDialog):
             else 2
         )
 
-        # A contagem de cópias só faz sentido quando há um único valor repetido.
+        # A contagem de cópias só faz sentido quando há um único valor
+        # repetido.
         self.copies_label.setVisible(event.stacked)
         self.copies_spin.setVisible(event.stacked)
 
@@ -208,7 +213,10 @@ class DamageReviewDialog(QDialog):
             return "Sem decisão ainda: vale o que a engine contaria sozinha."
         if not decision.parts:
             return "Decisão: não é dano (fora do total)."
-        return f"Decisão: {format_parts(decision.parts)}  →  {decision.damage:,} de dano."
+        return (
+            f"Decisão: {format_parts(decision.parts)}  →  {decision.damage:,}"
+            " de dano."
+        )
 
     def _render_images(self, event: HitEvent) -> None:
         while self.images_row.count():
@@ -266,7 +274,11 @@ class DamageReviewDialog(QDialog):
         event = self._event
         pairs = [(p.value, p.copies) for p in parts]
         # Texto igual à leitura da engine, com a mesma contagem, é "aceitar".
-        if len(pairs) == 1 and pairs[0] == (event.damage, 1) and not event.stacked:
+        if (
+            len(pairs) == 1
+            and pairs[0] == (event.damage, 1)
+            and not event.stacked
+        ):
             self._store(accept(event))
         else:
             self._store(correct(event, pairs))

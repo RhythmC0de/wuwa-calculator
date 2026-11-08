@@ -6,6 +6,8 @@ from PySide6.QtCore import QObject, Signal
 
 
 class ImageCharacterMismatchError(ValueError):
+    """Report a mismatch between the image and the selected character."""
+
     def __init__(self, detected_id: str, expected_id: str) -> None:
         super().__init__(
             f"A imagem foi identificada como '{detected_id}', "
@@ -16,6 +18,8 @@ class ImageCharacterMismatchError(ValueError):
 
 
 class ImageImportWorker(QObject):
+    """Recognize image attributes outside the UI thread."""
+
     progress = Signal(int)
     status = Signal(str)
     finished = Signal(dict)
@@ -27,11 +31,14 @@ class ImageImportWorker(QObject):
         self.target_id = target_id
 
     def run(self) -> None:
+        """Execute the worker and emit its result or failure signal."""
         try:
             self.status.emit(
                 "Baixando componentes para identificar atributos..."
             )
             self.progress.emit(15)
+            # Carrega o OCR opcional dentro do worker.
+            # pylint: disable-next=import-outside-toplevel
             from wuwa_calculator.services.ocr.service import extract_image_data
 
             self.progress.emit(35)

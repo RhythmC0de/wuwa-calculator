@@ -24,14 +24,10 @@ import argparse
 import csv
 import hashlib
 import shutil
-import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from wuwa_calculator.infrastructure.training_samples import (  # noqa: E402
+from wuwa_calculator.infrastructure.training_samples import (
     TrainingSampleStore,
     default_training_dir,
 )
@@ -41,18 +37,29 @@ MIN_RECOMMENDED = 300  # exemplos rotulados antes de valer a pena treinar
 
 
 def split_of(session: str) -> str:
+    """Assign a session deterministically to training or validation."""
     bucket = int(hashlib.sha1(session.encode()).hexdigest(), 16) % 100
     return "val" if bucket < VALIDATION_PERCENT else "train"
 
 
 def label_of(parts: tuple[tuple[int, int], ...]) -> str:
+    """Serialize corrected damage parts into a training label."""
     return "+".join(f"{v}" + (f"x{c}" if c > 1 else "") for v, c in parts)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--source", type=Path, default=None,
-                        help=f"pasta de exemplos (padrão: {default_training_dir()})")
+    """Run the export training dataset command-line entry point."""
+    # Keep the ordered CLI validation and execution pipeline together.
+    # pylint: disable=too-many-locals
+    parser = argparse.ArgumentParser(
+        description=__doc__.split("\n\n", maxsplit=1)[0]
+    )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=None,
+        help=f"pasta de exemplos (padrão: {default_training_dir()})",
+    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
 
@@ -69,9 +76,13 @@ def main() -> int:
     splits: Counter[str] = Counter()
     disagreements = 0
 
-    with open(args.out / "labels.csv", "w", newline="", encoding="utf-8") as handle:
+    with open(
+        args.out / "labels.csv", "w", newline="", encoding="utf-8"
+    ) as handle:
         writer = csv.writer(handle)
-        writer.writerow(["image", "split", "kind", "label", "copies_total", "engine_value"])
+        writer.writerow(
+            ["image", "split", "kind", "label", "copies_total", "engine_value"]
+        )
         for sample in samples:
             split = split_of(sample.session)
             label = label_of(sample.parts)
@@ -81,8 +92,16 @@ def main() -> int:
                 if not source.is_file():
                     continue
                 shutil.copyfile(source, images_out / source.name)
-                writer.writerow([f"images/{source.name}", split, sample.kind,
-                                 label, copies, sample.engine_value])
+                writer.writerow(
+                    [
+                        f"images/{source.name}",
+                        split,
+                        sample.kind,
+                        label,
+                        copies,
+                        sample.engine_value,
+                    ]
+                )
                 splits[split] += 1
             kinds[sample.kind] += 1
             if sample.kind == "corrected":
@@ -90,15 +109,19 @@ def main() -> int:
 
     labeled = kinds["accepted"] + kinds["corrected"]
     lines = [
-        f"Exemplos: {len(samples)}  (aceitos {kinds['accepted']}, "
-        f"corrigidos {kinds['corrected']}, descartados {kinds['discarded']})",
+        (
+            f"Exemplos: {len(samples)}  (aceitos {kinds['accepted']},"
+            f" corrigidos {kinds['corrected']}, descartados"
+            f" {kinds['discarded']})"
+        ),
         f"Imagens: treino {splits['train']}, validação {splits['val']}",
         f"A engine errou em {disagreements} de {labeled} exemplos rotulados.",
     ]
     if labeled < MIN_RECOMMENDED:
         lines.append(
-            f"Ainda poucos dados: o recomendado é ter pelo menos {MIN_RECOMMENDED} "
-            "exemplos rotulados (aceitos + corrigidos) antes de treinar."
+            "Ainda poucos dados: o recomendado é ter pelo menos"
+            f" {MIN_RECOMMENDED} exemplos rotulados (aceitos + corrigidos)"
+            " antes de treinar."
         )
     summary = "\n".join(lines)
     (args.out / "summary.txt").write_text(summary + "\n", encoding="utf-8")

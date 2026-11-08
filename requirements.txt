@@ -7,11 +7,7 @@ opencv-python>=4.8.0
 Pillow>=10.0.0
 numpy
 
-# OCR
-protobuf>=3.20.2,<4.0.0
-rapidocr-onnxruntime>=1.2.3
-paddlepaddle>=2.6.0
-paddleocr>=2.7.3
+# OCR de screenshots é opcional: python -m pip install -e ".[ocr]"
 
 # Integração com reprodutor de vídeo
 python-vlc

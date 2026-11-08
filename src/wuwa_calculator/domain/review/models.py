@@ -12,12 +12,16 @@ MAX_COPIES = 50
 
 
 class ReviewMode(str, Enum):
+    """Choose automatic totals or totals incorporating manual review."""
+
     AUTOMATIC = "automatic"  # só a engine decide o que entra no total
-    REVIEW = "review"        # o usuário confere o que a engine duvidou
+    REVIEW = "review"  # o usuário confere o que a engine duvidou
 
 
 class DecisionKind(str, Enum):
-    ACCEPTED = "accepted"    # "a leitura da engine está certa"
+    """Available actions for a reviewed damage event."""
+
+    ACCEPTED = "accepted"  # "a leitura da engine está certa"
     CORRECTED = "corrected"  # valor(es)/cópias diferentes dos da engine
     DISCARDED = "discarded"  # não é dano (HUD, quest, lixo)
 
@@ -37,6 +41,7 @@ class HitPart:
 
     @property
     def damage(self) -> int:
+        """Return the damage."""
         return self.value * self.copies
 
 
@@ -44,6 +49,8 @@ class HitPart:
 class HitEvent:
     """Evento da engine, já desligado do objeto pybind11."""
 
+    # Fields mirror the persisted or externally consumed data schema.
+    # pylint: disable=too-many-instance-attributes
     index: int
     timestamp: float
     damage: int
@@ -85,6 +92,8 @@ class HitEvent:
 
 @dataclass(frozen=True)
 class ReviewDecision:
+    """Accepted, corrected, or discarded interpretation of an event."""
+
     event_index: int
     kind: DecisionKind
     parts: tuple[HitPart, ...] = ()
@@ -97,10 +106,12 @@ class ReviewDecision:
 
     @property
     def damage(self) -> int:
+        """Return the damage."""
         return sum(part.damage for part in self.parts)
 
     @property
     def hits(self) -> int:
+        """Return the hits."""
         return sum(part.copies for part in self.parts)
 
 
@@ -123,4 +134,5 @@ def correct(event: HitEvent, parts: list[tuple[int, int]]) -> ReviewDecision:
 
 
 def discard(event: HitEvent) -> ReviewDecision:
+    """Create a decision excluding the event from reviewed totals."""
     return ReviewDecision(event.index, DecisionKind.DISCARDED)

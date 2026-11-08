@@ -3,7 +3,6 @@
 import functools
 import re
 
-
 UI_TRANSLATIONS = {
     "PT-BR": {
         "WUWA LAB": "WUWA LAB",
@@ -13,7 +12,9 @@ UI_TRANSLATIONS = {
         "Pronto": "Pronto",
         "Home": "Início",
         "Teams": "Times",
-        "WUTHERING WAVES | DAMAGE SIMULATION": "WUTHERING WAVES | SIMULAÇÃO DE DANO",
+        "WUTHERING WAVES | DAMAGE SIMULATION": (
+            "WUTHERING WAVES | SIMULAÇÃO DE DANO"
+        ),
         "Character Profile": "",
         "Signature Weapon": "Arma Característica",
         "KIT / ABILITIES": "KIT/HABILIDADES",
@@ -29,15 +30,17 @@ UI_TRANSLATIONS = {
         "EXPECTED AVERAGE": "MÉDIA ESPERADA",
         "CRIT RATE / CRIT DAMAGE": "TAXA CRÍTICA/ DANO CRÍTICO",
         "Relatório e DPS": "Relatório e DPS",
-        "Team Buffs": "Bônus de Equipe",
-        "Personal Buffs": "Bônus Pessoais",
+        "Team Buffs": "Bônus de equipe",
+        "Personal Buffs": "Bônus pessoais",
         "Markers": "Marcadores",
         "Abilities": "Habilidades",
         "Echo": "Echo",
         "Basic Attack": "Ataque Básico",
         "Heavy Attack": "Ataque Pesado",
         "Resonance Skill": "Habilidade de Ressonância",
-        "Resonance Liberation / Ultimate": "Liberação de Ressonância / Supremo",
+        "Resonance Liberation / Ultimate": (
+            "Liberação de Ressonância / Supremo"
+        ),
         "Coordinated Attack": "Ataque Coordenado",
         "Forte Circuit": "Circuito Forte",
         "Intro Skill": "Habilidade de Entrada",
@@ -54,14 +57,16 @@ UI_TRANSLATIONS = {
         "Element": "Elemento",
         "Damage type": "Tipo de dano",
         "Team": "Time",
-        "Team Buffs": "Bônus de equipe",
-        "Personal Buffs": "Bônus pessoais",
         "Total additive bonus": "Bônus aditivo total",
         "Crit": "Crítico",
         "Target defense multiplier": "Multiplicador de defesa do alvo",
-        "Elemental resistance multiplier": "Multiplicador de resistência elemental",
+        "Elemental resistance multiplier": (
+            "Multiplicador de resistência elemental"
+        ),
         "First ability base per hit": "Base da primeira habilidade por acerto",
-        "First ability critical per hit": "Crítico da primeira habilidade por acerto",
+        "First ability critical per hit": (
+            "Crítico da primeira habilidade por acerto"
+        ),
         "Atributos base": "Atributos base",
         "HP Base": "HP Base",
         "Attack (ATK) Base": "Ataque (ATK) base",
@@ -69,7 +74,9 @@ UI_TRANSLATIONS = {
         "Critical Rate (%)": "Taxa crítica (%)",
         "Critical Damage (%)": "Dano crítico (%)",
         "Combate e alvo": "Combate e alvo",
-        "Scaling / multiplicador da skill (%)": "Escalonamento / multiplicador da habilidade (%)",
+        "Scaling / multiplicador da skill (%)": (
+            "Escalonamento / multiplicador da habilidade (%)"
+        ),
         "Defesa do inimigo (%)": "Defesa do inimigo (%)",
         "Redução de RES elemental (%)": "Redução de RES elemental (%)",
         "Quantidade de acertos": "Quantidade de acertos",
@@ -78,21 +85,24 @@ UI_TRANSLATIONS = {
         "Elemento e tipo de dano": "Elemento e tipo de dano",
         "Elemento": "Elemento",
         "Tipo": "Tipo",
-        "Composição de time (DPS + 2 suportes)": "Composição de time (DPS + 2 suportes)",
+        "Composição de time (DPS + 2 suportes)": (
+            "Composição de time (DPS + 2 suportes)"
+        ),
         "DPS principal": "DPS principal",
         "Suporte 1": "Suporte 1",
         "Suporte 2": "Suporte 2",
         "Bônus global dos suportes (%)": "Bônus global dos suportes (%)",
-        "Model: Scaling × ATK × additive bonuses × defense/resistance multipliers,": "Modelo: Scaling × ATK × bônus aditivos × multiplicadores de defesa/resistência,",
-        "then expected crit using Critical Rate and Critical Damage.": "seguido do crítico esperado usando Taxa e Dano Crítico.",
+        (
+            "Model: Scaling × ATK × additive bonuses × defense/resistance "
+            "multipliers,"
+        ): (
+            "Modelo: Scaling × ATK × bônus aditivos × multiplicadores de"
+            " defesa/resistência,"
+        ),
+        "then expected crit using Critical Rate and Critical Damage.": (
+            "seguido do crítico esperado usando Taxa e Dano Crítico."
+        ),
         "Character ID": "ID da personagem",
-        "Element": "Elemento",
-        "Damage type": "Tipo de dano",
-        "Team": "Time",
-        "Crit": "Crítico",
-        "Total additive bonus": "Bônus aditivo total",
-        "First ability base per hit": "Base da primeira habilidade por acerto",
-        "First ability critical per hit": "Crítico da primeira habilidade por acerto",
         "Golpe fallback": "Golpe fallback",
         "scaling": "escalonamento",
         "hit(s)": "acerto(s)",
@@ -119,7 +129,9 @@ UI_TRANSLATIONS = {
         "Critical Rate (%)": "Critical Rate (%)",
         "Critical Damage (%)": "Critical Damage (%)",
         "Combate e alvo": "Combat and Target",
-        "Scaling / multiplicador da skill (%)": "Skill scaling / multiplier (%)",
+        "Scaling / multiplicador da skill (%)": (
+            "Skill scaling / multiplier (%)"
+        ),
         "Defesa do inimigo (%)": "Enemy defense (%)",
         "Redução de RES elemental (%)": "Elemental RES reduction (%)",
         "Quantidade de acertos": "Hit count",
@@ -128,7 +140,9 @@ UI_TRANSLATIONS = {
         "Elemento e tipo de dano": "Element and damage type",
         "Elemento": "Element",
         "Tipo": "Type",
-        "Composição de time (DPS + 2 suportes)": "Team composition (DPS + 2 supports)",
+        "Composição de time (DPS + 2 suportes)": (
+            "Team composition (DPS + 2 supports)"
+        ),
         "DPS principal": "Main DPS",
         "Suporte 1": "Support 1",
         "Suporte 2": "Support 2",
@@ -143,7 +157,8 @@ UI_TRANSLATIONS = {
 
 @functools.lru_cache(maxsize=1)
 def _ui_index() -> dict[str, str]:
-    """Qualquer variante (chave, PT-BR ou EN) -> chave canônica. Primeira vence."""
+    """Qualquer variante (chave, PT-BR ou EN) -> chave canônica. Primeira
+    vence."""
     index: dict[str, str] = {}
     for key, portuguese in UI_TRANSLATIONS["PT-BR"].items():
         english = UI_TRANSLATIONS["EN"].get(key, key)
@@ -153,7 +168,10 @@ def _ui_index() -> dict[str, str]:
 
 
 def translate_ui_text(text: str, language: str) -> str:
-    """Translate UI labels while leaving character and weapon names untouched."""
+    """
+    Translate UI labels while leaving character and weapon names
+    untouched.
+    """
     key = _ui_index().get(text)
     table = UI_TRANSLATIONS.get(language)
     if key is None or table is None:
@@ -162,62 +180,167 @@ def translate_ui_text(text: str, language: str) -> str:
 
 
 @functools.lru_cache(maxsize=2)
-def _replacement_plan(language: str) -> tuple[tuple[re.Pattern[str] | None, str, str], ...]:
-    """Substituições ordenadas e regex pré-compilados (construído uma vez por idioma)."""
+def _replacement_plan(
+    language: str,
+) -> tuple[tuple[re.Pattern[str] | None, str, str], ...]:
+    """Substituições ordenadas e regex pré-compilados (construído uma vez por
+    idioma)."""
     if language == "EN":
         replacements = {
             "Golpe fallback": "Fallback Hit",
-            "Ataque Básico": "Basic Attack", "Ataque Pesado": "Heavy Attack",
-            "Habilidade de Ressonância": "Resonance Skill", "Circuito Forte": "Forte Circuit",
-            "Liberação de Ressonância": "Resonance Liberation", "Habilidade de Entrada": "Intro Skill",
-            "Habilidade de Saída": "Outro Skill", "Ataque Coordenado": "Coordinated Attack",
-            "Bônus de Ataque em Equipe": "Team Attack Bonus", "Bônus de Dano Pessoal": "Personal Damage Bonus",
-            "Bônus de Equipe": "Team Buff", "Bônus Pessoal": "Personal Buff", "Marcador": "Marker",
+            "Ataque Básico": "Basic Attack",
+            "Ataque Pesado": "Heavy Attack",
+            "Habilidade de Ressonância": "Resonance Skill",
+            "Circuito Forte": "Forte Circuit",
+            "Liberação de Ressonância": "Resonance Liberation",
+            "Habilidade de Entrada": "Intro Skill",
+            "Habilidade de Saída": "Outro Skill",
+            "Ataque Coordenado": "Coordinated Attack",
+            "Bônus de Ataque em Equipe": "Team Attack Bonus",
+            "Bônus de Dano Pessoal": "Personal Damage Bonus",
+            "Bônus de Equipe": "Team Buff",
+            "Bônus Pessoal": "Personal Buff",
+            "Marcador": "Marker",
             "Acumuladores / Stacks": "Stacks",
-            "Descrição detalhada do ataque básico.": "Detailed Basic Attack description.",
-            "Descrição da habilidade de ressonância.": "Resonance Skill description.",
+            "Descrição detalhada do ataque básico.": (
+                "Detailed Basic Attack description."
+            ),
+            "Descrição da habilidade de ressonância.": (
+                "Resonance Skill description."
+            ),
             "Descrição do circuito forte.": "Forte Circuit description.",
-            "Descrição da liberação de ressonância.": "Resonance Liberation description.",
-            "Descrição da Xuanling...": "Xuanling description...", "Descrição da Yangyang...": "Yangyang description...",
-            "Insira aqui a descrição detalhada do ataque básico da Cartethyia.": "Enter the detailed Cartethyia Basic Attack description here.",
-            "Insira aqui a descrição detalhada da habilidade de ressonância.": "Enter the detailed Resonance Skill description here.",
-            "Insira aqui a descrição detalhada do circuito forte.": "Enter the detailed Forte Circuit description here.",
-            "Insira aqui a descrição detalhada da liberação de ressonância (Ult).": "Enter the detailed Resonance Liberation description here (Ultimate).",
-            "Ataque Básico: Aalto dispara até 5 tiros consecutivos, causando Dano Aero. O 4º Ataque Básico espalha a Névoa para a frente, a qual permanece por 1,5s.": "Basic Attack Aalto fires up to 5 consecutive shots, dealing Aero DMG. Basic Attack 4 will spread the Mist forward, which lasts for 1.5s.",
+            "Descrição da liberação de ressonância.": (
+                "Resonance Liberation description."
+            ),
+            "Descrição da Xuanling...": "Xuanling description...",
+            "Descrição da Yangyang...": "Yangyang description...",
+            (
+                "Insira aqui a descrição detalhada do ataque básico da "
+                "Cartethyia."
+            ): (
+                "Enter the detailed Cartethyia Basic Attack description here."
+            ),
+            (
+                "Insira aqui a descrição detalhada da habilidade de "
+                "ressonância."
+            ): ("Enter the detailed Resonance Skill description here."),
+            "Insira aqui a descrição detalhada do circuito forte.": (
+                "Enter the detailed Forte Circuit description here."
+            ),
+            (
+                "Insira aqui a descrição detalhada da liberação de "
+                "ressonância (Ult)."
+            ): (
+                "Enter the detailed Resonance Liberation description here"
+                " (Ultimate)."
+            ),
+            (
+                "Ataque Básico: Aalto dispara até 5 tiros consecutivos, "
+                "causando Dano Aero. O 4º Ataque Básico espalha a Névoa para "
+                "a frente, a qual permanece por 1,5s."
+            ): (
+                "Basic Attack Aalto fires up to 5 consecutive shots, dealing"
+                " Aero DMG. Basic Attack 4 will spread the Mist forward, which"
+                " lasts for 1.5s."
+            ),
         }
     else:
         replacements = {
             "Fallback Hit": "Golpe fallback",
-            "Basic Attack": "Ataque Básico", "Heavy Attack": "Ataque Pesado",
-            "Resonance Skill": "Habilidade de Ressonância", "Forte Circuit": "Circuito Forte",
-            "Resonance Liberation": "Liberação de Ressonância", "Intro Skill": "Habilidade de Entrada",
-            "Outro Skill": "Habilidade de Saída", "Coordinated Attack": "Ataque Coordenado",
-            "Team Attack Bonus": "Bônus de Ataque em Equipe", "Personal Damage Bonus": "Bônus de Dano Pessoal",
-            "Team Buff": "Bônus de Equipe", "Personal Buff": "Bônus Pessoal", "Marker": "Marcador",
+            "Basic Attack": "Ataque Básico",
+            "Heavy Attack": "Ataque Pesado",
+            "Resonance Skill": "Habilidade de Ressonância",
+            "Forte Circuit": "Circuito Forte",
+            "Resonance Liberation": "Liberação de Ressonância",
+            "Intro Skill": "Habilidade de Entrada",
+            "Outro Skill": "Habilidade de Saída",
+            "Coordinated Attack": "Ataque Coordenado",
+            "Team Attack Bonus": "Bônus de Ataque em Equipe",
+            "Personal Damage Bonus": "Bônus de Dano Pessoal",
+            "Team Buff": "Bônus de Equipe",
+            "Personal Buff": "Bônus Pessoal",
+            "Marker": "Marcador",
             "Stacks": "Acumuladores / Stacks",
-            "Detailed Basic Attack description.": "Descrição detalhada do ataque básico.",
-            "Resonance Skill description.": "Descrição da habilidade de ressonância.",
+            "Detailed Basic Attack description.": (
+                "Descrição detalhada do ataque básico."
+            ),
+            "Resonance Skill description.": (
+                "Descrição da habilidade de ressonância."
+            ),
             "Forte Circuit description.": "Descrição do circuito forte.",
-            "Resonance Liberation description.": "Descrição da liberação de ressonância.",
-            "Xuanling description...": "Descrição da Xuanling...", "Yangyang description...": "Descrição da Yangyang...",
-            "Enter the detailed Cartethyia Basic Attack description here.": "Insira aqui a descrição detalhada do ataque básico da Cartethyia.",
-            "Enter the detailed Resonance Skill description here.": "Insira aqui a descrição detalhada da habilidade de ressonância.",
-            "Enter the detailed Forte Circuit description here.": "Insira aqui a descrição detalhada do circuito forte.",
-            "Enter the detailed Resonance Liberation description here (Ultimate).": "Insira aqui a descrição detalhada da liberação de ressonância (Ult).",
-            "Basic Attack Aalto fires up to 5 consecutive shots, dealing Aero DMG. Basic Attack 4 will spread the Mist forward, which lasts for 1.5s.": "Ataque Básico: Aalto dispara até 5 tiros consecutivos, causando Dano Aero. O 4º Ataque Básico espalha a Névoa para a frente, a qual permanece por 1,5s.",
-            "Performs": "Executa", "performs": "executa", "Activates": "Ativa", "activates": "ativa",
-            "Deals": "Causa", "deals": "causa", "Applies": "Aplica", "applies": "aplica",
-            "Uses": "Usa", "uses": "usa", "Increases": "Aumenta", "increases": "aumenta",
-            "Consumes": "Consome", "consumes": "consome", "Switches": "Alterna", "switches": "alterna",
-            "builds": "acumula", "Builds": "Acumula", "and": "e", "while": "enquanto",
-            "after": "após", "before": "antes de", "damage": "dano", "attack": "ataque",
-            "attacks": "ataques", "skill": "habilidade", "skills": "habilidades",
-            "effect": "efeito", "effects": "efeitos", "current state": "estado atual",
+            "Resonance Liberation description.": (
+                "Descrição da liberação de ressonância."
+            ),
+            "Xuanling description...": "Descrição da Xuanling...",
+            "Yangyang description...": "Descrição da Yangyang...",
+            "Enter the detailed Cartethyia Basic Attack description here.": (
+                "Insira aqui a descrição detalhada do ataque básico da"
+                " Cartethyia."
+            ),
+            "Enter the detailed Resonance Skill description here.": (
+                "Insira aqui a descrição detalhada da habilidade de"
+                " ressonância."
+            ),
+            "Enter the detailed Forte Circuit description here.": (
+                "Insira aqui a descrição detalhada do circuito forte."
+            ),
+            (
+                "Enter the detailed Resonance Liberation description here "
+                "(Ultimate)."
+            ): (
+                "Insira aqui a descrição detalhada da liberação de ressonância"
+                " (Ult)."
+            ),
+            (
+                "Basic Attack Aalto fires up to 5 consecutive shots, dealing "
+                "Aero DMG. Basic Attack 4 will spread the Mist forward, which "
+                "lasts for 1.5s."
+            ): (
+                "Ataque Básico: Aalto dispara até 5 tiros consecutivos,"
+                " causando Dano Aero. O 4º Ataque Básico espalha a Névoa para"
+                " a frente, a qual permanece por 1,5s."
+            ),
+            "Performs": "Executa",
+            "performs": "executa",
+            "Activates": "Ativa",
+            "activates": "ativa",
+            "Deals": "Causa",
+            "deals": "causa",
+            "Applies": "Aplica",
+            "applies": "aplica",
+            "Uses": "Usa",
+            "uses": "usa",
+            "Increases": "Aumenta",
+            "increases": "aumenta",
+            "Consumes": "Consome",
+            "consumes": "consome",
+            "Switches": "Alterna",
+            "switches": "alterna",
+            "builds": "acumula",
+            "Builds": "Acumula",
+            "and": "e",
+            "while": "enquanto",
+            "after": "após",
+            "before": "antes de",
+            "damage": "dano",
+            "attack": "ataque",
+            "attacks": "ataques",
+            "skill": "habilidade",
+            "skills": "habilidades",
+            "effect": "efeito",
+            "effects": "efeitos",
+            "current state": "estado atual",
             "special attacks": "ataques especiais",
         }
     plan = []
-    for source, target in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
-        pattern = re.compile(rf"\b{re.escape(source)}\b") if language == "PT-BR" and source.isalpha() else None
+    for source, target in sorted(
+        replacements.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        pattern = (
+            re.compile(rf"\b{re.escape(source)}\b")
+            if language == "PT-BR" and source.isalpha()
+            else None
+        )
         plan.append((pattern, source, target))
     return tuple(plan)
 

@@ -1,36 +1,58 @@
+"""Application appearance, language, and session preferences."""
+
 from __future__ import annotations
-from PySide6.QtCore import Qt, QSettings, QUrl
+
+from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QUrl
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QVBoxLayout,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
-    QWidget,
-    QFormLayout,
-    QCheckBox,
-    QSlider,
-    QComboBox,
-    QPushButton,
-    QFileDialog,
     QMessageBox,
+    QPushButton,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
 )
 
-from wuwa_calculator.ui.components.components import TitleLabel
-from wuwa_calculator.ui.components.components import Card
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from wuwa_calculator.ui.panels.window import WuwaQtWindow
+from wuwa_calculator.ui.components.components import Card, TitleLabel
+from wuwa_calculator.ui.language import DEFAULT, SUPPORTED, language_settings
+from wuwa_calculator.ui.panels.window import WuwaQtWindow
 
 
 class SettingsTab(QWidget):
-    def __init__(self, parent: QWidget | None = None,
-                 host: QWidget | None = None) -> None:
+    """Edit appearance, language, and session preferences."""
+
+    def __init__(
+        self, parent: QWidget | None = None, host: QWidget | None = None
+    ) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         super().__init__(parent)
         self.host = host
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(14)
+
+        language_card = Card()
+        language_layout = QVBoxLayout(language_card)
+        language_layout.setContentsMargins(20, 20, 20, 20)
+        language_layout.addWidget(TitleLabel("Idioma / Language"))
+        language_form = QFormLayout()
+        self.language_box = QComboBox()
+        self.language_box.setObjectName("applicationLanguage")
+        self.language_box.addItems(SUPPORTED)
+        self._set_language(language_settings().code)
+        language_form.addRow("Idioma do aplicativo", self.language_box)
+        language_layout.addLayout(language_form)
+        layout.addWidget(language_card)
+        self.language_box.currentTextChanged.connect(
+            language_settings().set_language
+        )
+        language_settings().changed.connect(self._set_language)
 
         appearance_card = Card()
         appearance_layout = QVBoxLayout(appearance_card)
@@ -50,13 +72,15 @@ class SettingsTab(QWidget):
         appearance_form.addRow("Opacidade da interface", self.opacity_slider)
 
         self.accent_box = QComboBox()
-        self.accent_box.addItems([
-            "Ciano Tethys", "Dourado Sol", "Roxo Nécro", "Vermelho Alerta"
-        ])
+        self.accent_box.addItems(
+            ["Ciano Tethys", "Dourado Sol", "Roxo Nécro", "Vermelho Alerta"]
+        )
         appearance_form.addRow("Cor do tema", self.accent_box)
 
         self.confirm_exit_box = QCheckBox(
-            "Confirmar antes de fechar o programa")
+            "Confirmar antes de fechar o programa"
+        )
+        appearance_form.addRow("Saída", self.confirm_exit_box)
         appearance_layout.addLayout(appearance_form)
         layout.addWidget(appearance_card)
 
@@ -94,8 +118,10 @@ class SettingsTab(QWidget):
         data_layout = QVBoxLayout(data_card)
         data_layout.setContentsMargins(20, 20, 20, 20)
         data_layout.addWidget(TitleLabel("Dados da sessão"))
-        data_text = QLabel("Remova as abas de personagens "
-                           "carregadas sem apagar arquivos salvos.")
+        data_text = QLabel(
+            "Remova as abas de personagens "
+            "carregadas sem apagar arquivos salvos."
+        )
         data_text.setObjectName("muted")
         data_layout.addWidget(data_text)
         clear_button = QPushButton("Limpar personagens carregados")
@@ -112,26 +138,37 @@ class SettingsTab(QWidget):
         layout.addStretch(1)
 
         self.background_box.toggled.connect(self._background_changed)
-        self.opacity_slider.valueChanged.connect(self._interface_opacity_changed)
+        self.opacity_slider.valueChanged.connect(
+            self._interface_opacity_changed
+        )
         self.accent_box.currentTextChanged.connect(self._accent_changed)
         self.confirm_exit_box.toggled.connect(self._confirm_exit_changed)
         self._load_preferences()
 
     @property
     def preferences(self) -> QSettings:
+        """Return the shared persistent application preferences."""
         return QSettings("Tethys", "Tethys")
+
+    def _set_language(self, code: str) -> None:
+        with QSignalBlocker(self.language_box):
+            self.language_box.setCurrentText(code)
 
     def _load_preferences(self) -> None:
         settings = self.preferences
         self.background_box.setChecked(
-            settings.value("background", True, type=bool))
+            settings.value("background", True, type=bool)
+        )
 
-        self.opacity_slider.setValue(settings.value("interface_opacity", 85, type=int))
+        self.opacity_slider.setValue(
+            settings.value("interface_opacity", 85, type=int)
+        )
         accent = settings.value("accent_theme", "Ciano Tethys", type=str)
         index = self.accent_box.findText(accent)
         self.accent_box.setCurrentIndex(max(0, index))
         self.confirm_exit_box.setChecked(
-            settings.value("confirm_exit", True, type=bool))
+            settings.value("confirm_exit", True, type=bool)
+        )
 
         wallpaper = settings.value("wallpaper", "", type=str)
         self._set_wallpaper_label(wallpaper)
@@ -213,23 +250,11 @@ class SettingsTab(QWidget):
         if not isinstance(window, WuwaQtWindow):
             return
 
-        for character_tab in window.character_tabs.values():
-            tab_index = window.tabs.indexOf(character_tab)
-            if tab_index >= 0:
-                window.tabs.removeTab(tab_index)
-            character_tab.deleteLater()
-        window.character_tabs.clear()
-
-        while window.character_sidebar_layout.count():
-            item = window.character_sidebar_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
-
-        window.tabs.setCurrentIndex(0)
-        window._set_sidebar_active("⌂   Home")
+        window.clear_characters()
 
     def _restore_defaults(self) -> None:
         self.preferences.clear()
+        language_settings().set_language(DEFAULT)
         self.background_box.setChecked(True)
         self.opacity_slider.setValue(85)
         self.accent_box.setCurrentText("Ciano Tethys")
@@ -238,4 +263,3 @@ class SettingsTab(QWidget):
         window = self.host or self.window()
         if isinstance(window, WuwaQtWindow):
             window.apply_preferences()
-

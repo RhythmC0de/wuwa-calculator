@@ -1,12 +1,16 @@
+"""Character navigation buttons with independent close controls."""
+
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QPushButton,
     QToolButton,
     QWidget,
 )
-from PySide6.QtCore import Signal   
 
 
 class CharacterSidebarButton(QPushButton):
+    """Character navigation button with an embedded close action."""
+
     close_requested = Signal()
 
     def __init__(self, label: str, parent: QWidget | None = None) -> None:

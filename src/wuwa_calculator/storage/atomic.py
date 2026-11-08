@@ -11,8 +11,13 @@ from pathlib import Path
 MAX_JSON_BYTES = 32 * 1024 * 1024
 
 
-def read_json(path: Path, default: object, *, max_bytes: int = MAX_JSON_BYTES) -> object:
-    """Return parsed JSON or ``default``. Corrupt files are renamed, not lost."""
+def read_json(
+    path: Path, default: object, *, max_bytes: int = MAX_JSON_BYTES
+) -> object:
+    """
+    Return parsed JSON or ``default``. Corrupt files are renamed, not
+    lost.
+    """
     try:
         if not path.is_file():
             return default
@@ -37,9 +42,12 @@ def _quarantine(path: Path) -> None:
 
 
 def write_json(path: Path, value: object, *, indent: int | None = 2) -> None:
-    """Write via temp file + fsync + os.replace so a crash never truncates data."""
+    """Write via temp file + fsync + os.replace so a crash never truncates
+    data."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=path.name + ".", suffix=".tmp", dir=path.parent
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(value, handle, ensure_ascii=False, indent=indent)

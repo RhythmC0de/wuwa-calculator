@@ -8,6 +8,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QMessageBox, QWidget
 
+from wuwa_calculator.infrastructure.safe_http import fetch_image_bytes
+
 TETHYS_CLOSE_ICON_PATH: str | None = None
 TETHYS_CLOSE_ICON_URL: str | None = None
 TETHYS_CLOSE_ICON_LOCAL: str | None = str(
@@ -35,6 +37,8 @@ def _circular_pixmap(source: QPixmap, size: int = 64) -> QPixmap:
 
 
 class TethysCloseDialog(QMessageBox):
+    """Ask the user to confirm closing the application."""
+
     def __init__(
         self,
         icon_path: str | None = None,
@@ -114,8 +118,6 @@ class TethysCloseDialog(QMessageBox):
     @staticmethod
     def _fetch_icon_from_url(url: str) -> QPixmap | None:
         try:
-            from wuwa_calculator.infrastructure.safe_http import fetch_image_bytes
-
             pixmap = QPixmap()
             if pixmap.loadFromData(fetch_image_bytes(url, timeout=5)):
                 return _circular_pixmap(pixmap)
@@ -130,5 +132,6 @@ class TethysCloseDialog(QMessageBox):
         icon_local: str | None = None,
         parent: QWidget | None = None,
     ) -> bool:
+        """Show the exit confirmation and return whether it was accepted."""
         dialog = TethysCloseDialog(icon_path, icon_url, icon_local, parent)
         return dialog.exec() == QMessageBox.StandardButton.Yes

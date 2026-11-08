@@ -2,7 +2,8 @@
 
 from wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
 
-# * EDITAVEL: adicione "id": "Elemento" para colorir card, badge e glow do personagem.
+# * EDITAVEL: adicione "id": "Elemento" para colorir card, badge e glow
+# do personagem.
 # ! REMOVER: remova o registro daqui quando o ID sair de characters_ids.py.
 CHARACTER_ELEMENTS: dict[str, str] = {
     "aalto": "Aero",
@@ -71,4 +72,7 @@ CHARACTER_ELEMENTS: dict[str, str] = {
 
 INVALID_ELEMENT_IDS = set(CHARACTER_ELEMENTS) - KNOWN_CHARACTER_IDS
 if INVALID_ELEMENT_IDS:
-    raise ValueError(f"Element IDs are not present in KNOWN_CHARACTER_IDS: {INVALID_ELEMENT_IDS}")
+    raise ValueError(
+        "Element IDs are not present in KNOWN_CHARACTER_IDS:"
+        f" {INVALID_ELEMENT_IDS}"
+    )

@@ -1,3 +1,5 @@
+"""Recognize character attributes from OCR text and build-card images."""
+
 # captura os stats de uma imagem usando OCR + regex
 # para capturar os stats, a imagem precisa estar
 # em escala de cinza e com contraste/nitidez aumentados
@@ -9,12 +11,20 @@ import json
 import logging
 import os
 import re
-import unicodedata
+import sys
 from pathlib import Path
 
-from wuwa_calculator.data.characters_ids import KNOWN_CHARACTER_IDS
-from wuwa_calculator.services.characters.identity import normalize_character_id, normalized_id_map
+from wuwa_calculator.services.characters.identity import (
+    normalize_character_id,
+    normalized_id_map,
+)
 from wuwa_calculator.services.image.image_processing import prepare_for_ocr
+from wuwa_calculator.services.ocr.layout import (
+    FLAT_MINIMUMS,
+    TextLine,
+    clean_number,
+    find_totals,
+)
 
 log = logging.getLogger(__name__)
 
@@ -23,73 +33,85 @@ NUMBER = r"([\d.,]+)"
 PERCENT = r"\s*%?"
 
 ELEMENTS = (
-    "Electro", "Spectro",
-    "Havoc", "Fusion",
-    "Glacio", "Aero",)
+    "Electro",
+    "Spectro",
+    "Havoc",
+    "Fusion",
+    "Glacio",
+    "Aero",
+)
 
-ELEMENT_PATTERN = "|".join(ELEMENTS)
-
-_engine = None
+ELEMENT_PATTERN = "(?:" + "|".join(ELEMENTS) + ")"
 
 
+@functools.lru_cache(maxsize=1)
 def _require_ocr_engine():
-    """Cria o PaddleOCR sob demanda (import e modelos custam segundos/centenas de MB)."""
-    global _engine  # pylint: disable=global-statement
-    if _engine is not None:
-        return _engine
+    """Cria o PaddleOCR sob demanda (import e modelos custam segundos/centenas
+    de MB)."""
     # Variáveis só são ajustadas quando o OCR é realmente usado, não no import.
     os.environ.setdefault("PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT", "0")
     os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
     try:
+        # Load this optional/heavy dependency only when the action runs.
+        # pylint: disable-next=import-outside-toplevel
         from paddleocr import PaddleOCR
     except ModuleNotFoundError as exc:
         raise RuntimeError(
-            "PaddleOCR não está instalado. Instale as dependências do projeto "
-            "com `pip install -r requirements.txt` e tente novamente."
+            "PaddleOCR ou uma dependência não está instalado. "
+            'Instale o extra com `python -m pip install -e ".[ocr]"` '
+            "em um ambiente Python compatível com PaddlePaddle. "
+            "O ambiente atual usa Python "
+            f"{sys.version_info.major}.{sys.version_info.minor}."
         ) from exc
-    _engine = PaddleOCR(lang="en")
-    return _engine
+    return PaddleOCR(lang="en")
 
 
 STAT_PATTERNS: dict[str, re.Pattern[str]] = {
-    "atk": re.compile(
-        rf"\bATK\b{SEP}{NUMBER}",
-        re.IGNORECASE
-        ),
-    "hp": re.compile(
-        rf"\bHP\b{SEP}{NUMBER}", re.IGNORECASE
-        ),
-    "def": re.compile(
-        rf"\bDEF\b{SEP}{NUMBER}", re.IGNORECASE
-        ),
+    "atk": re.compile(rf"\bATK\b{SEP}{NUMBER}", re.IGNORECASE),
+    "hp": re.compile(rf"\bHP\b{SEP}{NUMBER}", re.IGNORECASE),
+    "def": re.compile(rf"\bDEF\b{SEP}{NUMBER}", re.IGNORECASE),
     "crit_rate": re.compile(
         rf"\bCrit(?:ical)?\.?\s*(?:R(?:ate|ote)|Taxa)\b"
-        rf"{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
     ),
     "crit_dmg": re.compile(
         rf"\bCrit(?:ical)?\.?\s*(?:DMG|Damage|Dano)\b"
-        rf"{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
     ),
     "energy_regen": re.compile(
         rf"\b(?:Energy\s*Regen|Energy\s*Recharge|Recarga\s*de\s*Energia)\b"
-        rf"{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
     ),
     "elemental_dmg": re.compile(
         rf"\b{ELEMENT_PATTERN}\b"
         rf"\s*DMG\s*(?:Bonus)?\s*{SEP}{NUMBER}\s*{PERCENT}",
-        re.IGNORECASE
+        re.IGNORECASE,
     ),
     "heavy_atk_dmg": re.compile(
         rf"\bHeavy\s*Attack\s*DMG\s*(?:Bonus)?\s*\b"
-        rf"{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
     ),
     "liberation_dmg": re.compile(
         rf"\b(?:Resonance\s*)?Liberation\s*DMG\s*(?:Bonus)?\s*\b"
-        rf"{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
+    ),
+    "basic_atk_dmg": re.compile(
+        rf"\bBasic\s*Attack\s*DMG\s*(?:Bonus)?\s*\b"
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
+    ),
+    "healing_bonus": re.compile(
+        rf"\bHealing\s*Bonus{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
     ),
     "skill_dmg": re.compile(
         rf"\b(?:Resonance\s*)?Skill\s*DMG\s*(?:Bonus)?\s*\b"
-        rf"{SEP}{NUMBER}\s*{PERCENT}", re.IGNORECASE
+        rf"{SEP}{NUMBER}\s*{PERCENT}",
+        re.IGNORECASE,
     ),
 }
 
@@ -124,6 +146,58 @@ def extract_text_from_paddle_result(result) -> str:
     return "\n".join(lines)
 
 
+def lines_from_paddle_result(result) -> list[TextLine]:
+    """Linhas com caixa (centro e tamanho)
+    a partir da saída do PaddleOCR 3.x."""
+    # Keep validation intermediates explicit in this parsing pipeline.
+    # pylint: disable=too-many-locals
+    lines: list[TextLine] = []
+    if not isinstance(result, list):
+        result = [result]
+    for page in result:
+        data = getattr(page, "json", page)
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(data, dict):
+            continue
+        data = data.get("res", data)
+        if not isinstance(data, dict):
+            continue
+        texts = data.get("rec_texts") or []
+        scores = data.get("rec_scores") or []
+        boxes = data.get("rec_boxes")
+        if boxes is None:
+            boxes = data.get("rec_polys")
+        if boxes is None or len(boxes) != len(texts):
+            continue
+        for index, text in enumerate(texts):
+            try:
+                box = boxes[index]
+                if len(box) == 4 and not hasattr(box[0], "__len__"):
+                    x0, y0, x1, y1 = (float(v) for v in box)
+                else:
+                    xs = [float(point[0]) for point in box]
+                    ys = [float(point[1]) for point in box]
+                    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+            except (TypeError, ValueError, IndexError):
+                continue
+            confidence = float(scores[index]) if index < len(scores) else 0.0
+            lines.append(
+                TextLine(
+                    str(text).strip(),
+                    confidence,
+                    (x0 + x1) / 2,
+                    (y0 + y1) / 2,
+                    x1 - x0,
+                    y1 - y0,
+                )
+            )
+    return lines
+
+
 _normalise_character = normalize_character_id
 
 
@@ -149,26 +223,6 @@ def identify_character(text: str) -> str | None:
     return None
 
 
-def clean_number(raw: str | None) -> float | None:
-    """Converte o número reconhecido pelo OCR para float."""
-    if raw is None:
-        return None
-    text = raw.strip().replace("%", "").replace(" ", "")
-    if "." in text and "," in text:
-        if text.rfind(",") > text.rfind("."):
-            text = text.replace(".", "").replace(",", ".")  # 1.234,5
-        else:
-            text = text.replace(",", "")  # 1,234.5
-    elif "." not in text and re.fullmatch(r"\d+,\d{1,2}", text):
-        text = text.replace(",", ".")  # decimal: 12,5
-    else:
-        text = text.replace(",", "")  # milhar: 1,234
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
-
 def extract_stats_from_text(text: str) -> dict[str, float]:
     """Texto bruto do OCR → dicionário de atributos."""
     text = re.sub(r"(?i)crit\s*[.:,;]?\s*(dmg|damage|dano)", r"Crit DMG", text)
@@ -181,6 +235,14 @@ def extract_stats_from_text(text: str) -> dict[str, float]:
         value = clean_number(match.group(1))
         if value is not None:
             stats[key] = value
+    # Sem posição não dá para separar o painel de totais dos Echos. Um cartão
+    # só com Echos tem ATK 150, HP 430 etc.; se nenhum dos três stats base
+    # parece um total, descarta tudo em vez de gravar valores de Echo.
+    if not any(
+        stats.get(key, 0.0) >= minimum
+        for key, minimum in FLAT_MINIMUMS.items()
+    ):
+        return {}
     return stats
 
 
@@ -190,20 +252,34 @@ def extract_stats_from_image(path: str | Path) -> dict[str, float]:
     return stats
 
 
-def extract_image_data(path: str | Path) -> tuple[dict[str, float], str | None]:
+def extract_image_data(
+    path: str | Path,
+) -> tuple[dict[str, float], str | None]:
     """Imagem → texto, atributos reconhecidos e personagem identificado."""
     path = Path(path)
     engine = _require_ocr_engine()
     result = engine.predict(str(path))
     text = extract_text_from_paddle_result(result)
+    totals = find_totals(lines_from_paddle_result(result))
+    if totals is not None:
+        return totals, identify_character(text)
     stats = extract_stats_from_text(text)
     if len(stats) < 3:
         try:
+            # Load this optional/heavy dependency only when the action runs.
+            # pylint: disable-next=import-outside-toplevel
             import numpy as np
 
             prepared = prepare_for_ocr(path, width=1920)
             enhanced_result = engine.predict(np.asarray(prepared))
             enhanced_text = extract_text_from_paddle_result(enhanced_result)
+            enhanced_totals = find_totals(
+                lines_from_paddle_result(enhanced_result)
+            )
+            if enhanced_totals is not None:
+                return enhanced_totals, identify_character(
+                    "\n".join(part for part in (text, enhanced_text) if part)
+                )
             text = "\n".join(part for part in (text, enhanced_text) if part)
         except (OSError, RuntimeError, ValueError) as exc:
             log.debug("segunda passada de OCR falhou: %s", type(exc).__name__)
@@ -212,13 +288,15 @@ def extract_image_data(path: str | Path) -> tuple[dict[str, float], str | None]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extrai stats de uma build card via OCR.")
+    parser = argparse.ArgumentParser(
+        description="Extrai stats de uma build card via OCR."
+    )
     parser.add_argument("image", help="Caminho da imagem a processar.")
     args = parser.parse_args()
 
     try:
-        stats, detected_character = extract_image_data(args.image)
+        cli_stats, detected_character = extract_image_data(args.image)
         print(f"Personagem detectado: {detected_character}")
-        print(f"Stats: {stats}")
+        print(f"Stats: {cli_stats}")
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc

@@ -29,14 +29,20 @@ from types import ModuleType
 REQUIRED_API_LEVEL = 2
 
 _MODULE_NAME = "damage_analyzer"
-_BUILD_SUBDIRS = ("build", "build/Release", "build/RelWithDebInfo", "build/Debug", "")
+_BUILD_SUBDIRS = (
+    "build",
+    "build/Release",
+    "build/RelWithDebInfo",
+    "build/Debug",
+    "",
+)
 _NATIVE_BASES = (
     Path("native") / "damage_analyzer",
     Path("wuwa_calculator") / "native" / "damage_analyzer",
     Path("src") / "wuwa_calculator" / "native" / "damage_analyzer",
 )
 
-_engine: ModuleType | None = None
+_ENGINE_CACHE: dict[str, ModuleType] = {}
 _load_lock = threading.Lock()
 _dll_directories: list[object] = []
 
@@ -46,14 +52,20 @@ def _candidate_directories() -> list[Path]:
 
     # Carregar .so/.pyd de uma pasta arbitrária equivale a executar código:
     # o override por ambiente só vale em modo debug.
-    configured = os.environ.get("DAMAGE_ANALYZER_DIR") if os.environ.get("TETHYS_DEBUG") == "1" else None
+    configured = (
+        os.environ.get("DAMAGE_ANALYZER_DIR")
+        if os.environ.get("TETHYS_DEBUG") == "1"
+        else None
+    )
     if configured:
         directories.append(Path(configured))
 
     for parent in Path(__file__).resolve().parents:
         for base in _NATIVE_BASES:
             for sub in _BUILD_SUBDIRS:
-                directories.append(parent / base / sub if sub else parent / base)
+                directories.append(
+                    parent / base / sub if sub else parent / base
+                )
 
     unique: list[Path] = []
     for directory in directories:
@@ -67,7 +79,8 @@ def _module_files(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
     return [
-        item for item in directory.iterdir()
+        item
+        for item in directory.iterdir()
         if item.is_file()
         and item.name.startswith(_MODULE_NAME)
         and item.suffix in {".so", ".pyd"}
@@ -75,7 +88,10 @@ def _module_files(directory: Path) -> list[Path]:
 
 
 def _matches_this_python(path: Path) -> bool:
-    return any(path.name == _MODULE_NAME + suffix for suffix in importlib.machinery.EXTENSION_SUFFIXES)
+    return any(
+        path.name == _MODULE_NAME + suffix
+        for suffix in importlib.machinery.EXTENSION_SUFFIXES
+    )
 
 
 def _register_directory(directory: Path) -> None:
@@ -95,9 +111,8 @@ def load_engine() -> ModuleType:
 
 
 def _load_engine_locked() -> ModuleType:
-    global _engine
-    if _engine is not None:
-        return _engine
+    if "engine" in _ENGINE_CACHE:
+        return _ENGINE_CACHE["engine"]
 
     searched: list[str] = []
     wrong_python: list[Path] = []
@@ -108,7 +123,9 @@ def _load_engine_locked() -> ModuleType:
         if not files:
             continue
         searched.append(str(directory))
-        match = next((item for item in files if _matches_this_python(item)), None)
+        match = next(
+            (item for item in files if _matches_this_python(item)), None
+        )
         if match is not None:
             _register_directory(directory)
             chosen = match
@@ -130,8 +147,11 @@ def _load_engine_locked() -> ModuleType:
         sys.modules.pop(_MODULE_NAME, None)
         lines = [
             "Não foi possível carregar a engine C++ 'damage_analyzer'.",
-            f"Python em uso: {sys.version_info.major}.{sys.version_info.minor} "
-            f"({importlib.machinery.EXTENSION_SUFFIXES[0]}).",
+            (
+                "Python em uso:"
+                f" {sys.version_info.major}.{sys.version_info.minor}"
+                f" ({importlib.machinery.EXTENSION_SUFFIXES[0]})."
+            ),
         ]
         if wrong_python:
             lines.append(
@@ -157,5 +177,5 @@ def _load_engine_locked() -> ModuleType:
             f"{REQUIRED_API_LEVEL}). Recompile native/damage_analyzer."
         )
 
-    _engine = module
+    _ENGINE_CACHE["engine"] = module
     return module

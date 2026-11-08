@@ -16,6 +16,7 @@ def needs_review(event: HitEvent) -> bool:
 
 
 def review_queue(events: Iterable[HitEvent]) -> list[HitEvent]:
+    """Return the events that still require a review decision."""
     return sorted(
         (e for e in events if needs_review(e)), key=lambda e: e.timestamp
     )
@@ -42,12 +43,18 @@ def final_parts(
     não confirmados sem decisão aparecem com partes vazias."""
     decisions = decisions or {}
     for event in events:
-        decision = decisions.get(event.index) if mode is ReviewMode.REVIEW else None
-        yield event, (decision.parts if decision is not None else default_parts(event))
+        decision = (
+            decisions.get(event.index) if mode is ReviewMode.REVIEW else None
+        )
+        yield event, (
+            decision.parts if decision is not None else default_parts(event)
+        )
 
 
 @dataclass(frozen=True)
 class DamageTotals:
+    """Aggregate damage, hits, and pending reviews for a session."""
+
     total_damage: int
     hits: int
     peak_damage: int
@@ -97,4 +104,6 @@ def compute_totals(
             hits += part.copies
             peak = max(peak, part.value)
 
-    return DamageTotals(total, hits, peak, pending_items, pending_damage, reviewed)
+    return DamageTotals(
+        total, hits, peak, pending_items, pending_damage, reviewed
+    )

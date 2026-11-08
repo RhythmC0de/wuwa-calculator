@@ -1,7 +1,8 @@
-import sys
+"""Fallback interface for unfinished or unavailable application views."""
+
 from PySide6.QtWidgets import (
-    QVBoxLayout,
     QLabel,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -9,9 +10,11 @@ from wuwa_calculator.ui.components.components import Card, TitleLabel
 
 
 class PlaceholderTab(QWidget):
-    def __init__(self, title: str,
-                 description: str,
-                 parent: QWidget | None = None) -> None:
+    """Explain features or dependencies unavailable in a tab."""
+
+    def __init__(
+        self, title: str, description: str, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 18, 18, 18)

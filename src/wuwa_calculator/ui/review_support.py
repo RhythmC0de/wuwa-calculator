@@ -34,7 +34,10 @@ from ..domain.review import (
     final_parts,
     review_queue,
 )
-from ..infrastructure.training_samples import TrainingSampleStore, new_session_id
+from ..infrastructure.training_samples import (
+    TrainingSampleStore,
+    new_session_id,
+)
 
 # Instantes (s, relativos ao hit) recortados para a revisão e para o treino.
 CROP_OFFSETS = (0.0, 0.1, 0.2)
@@ -48,8 +51,13 @@ class _CropWorker(QObject):
     failed = Signal(str)
     finished = Signal()
 
-    def __init__(self, extract: Callable[..., Any], video_path: str,
-                 raw_events: list[Any], indices: list[int]) -> None:
+    def __init__(
+        self,
+        extract: Callable[..., Any],
+        video_path: str,
+        raw_events: list[Any],
+        indices: list[int],
+    ) -> None:
         super().__init__()
         self._extract = extract
         self._video_path = video_path
@@ -57,22 +65,36 @@ class _CropWorker(QObject):
         self._indices = indices
 
     def run(self) -> None:
+        """Execute the worker and emit its result or failure signal."""
         try:
             crops = self._extract(
                 self._video_path, self._raw_events, 0.6, list(CROP_OFFSETS), 96
             )
             self.done.emit(
-                {index: list(images) for index, images in zip(self._indices, crops)}
+                {
+                    index: list(images)
+                    for index, images in zip(self._indices, crops)
+                }
             )
+        # Thread boundary: relay every worker failure through its Qt signal.
+        # pylint: disable-next=broad-exception-caught
         except Exception as error:  # pybind11/IO: não pode derrubar a UI
-            self.failed.emit(f"{type(error).__name__}: {error}\n{traceback.format_exc()}")
+            self.failed.emit(
+                f"{type(error).__name__}: {error}\n{traceback.format_exc()}"
+            )
         finally:
             self.finished.emit()
 
 
 class ReviewSupport(QObject):
-    hits_replaced = Signal(list)    # [{"timestamp","damage","hits","peak"}, ...]
-    totals_changed = Signal(dict)   # {"total_damage","total_hits","peak_damage","note"}
+    """Coordinate damage review, crops, and recomputed totals."""
+
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
+    hits_replaced = Signal(list)  # [{"timestamp","damage","hits","peak"}, ...]
+    totals_changed = Signal(
+        dict
+    )  # {"total_damage","total_hits","peak_damage","note"}
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -105,10 +127,12 @@ class ReviewSupport(QObject):
             "ou empilhados) e o total usa a sua decisão."
         )
         row.addWidget(self.mode_combo)
-        self.collect_check = QCheckBox("Guardar exemplos para treinar a IA local")
+        self.collect_check = QCheckBox(
+            "Guardar exemplos para treinar a IA local"
+        )
         self.collect_check.setToolTip(
-            "Salva só o recorte do número e o valor que você confirmou, em uma "
-            "pasta do seu computador. Nada é enviado para fora."
+            "Salva só o recorte do número e o valor que você confirmou, em uma"
+            " pasta do seu computador. Nada é enviado para fora."
         )
         row.addWidget(self.collect_check)
         self.review_button = QPushButton("Revisar")
@@ -119,20 +143,26 @@ class ReviewSupport(QObject):
         self.note_label.setWordWrap(True)
         row.addWidget(self.note_label, 1)
 
-        saved_mode = str(self._settings.value("review/mode", ReviewMode.AUTOMATIC.value))
+        saved_mode = str(
+            self._settings.value("review/mode", ReviewMode.AUTOMATIC.value)
+        )
         index = max(0, self.mode_combo.findData(saved_mode))
         self.mode_combo.setCurrentIndex(index)
         self.collect_check.setChecked(
-            str(self._settings.value("review/collect", "false")).lower() == "true"
+            str(self._settings.value("review/collect", "false")).lower()
+            == "true"
         )
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
         self.collect_check.toggled.connect(
-            lambda on: self._settings.setValue("review/collect", "true" if on else "false")
+            lambda on: self._settings.setValue(
+                "review/collect", "true" if on else "false"
+            )
         )
 
     # ------------------------------------------------------------------ estado
     @property
     def mode(self) -> ReviewMode:
+        """Return the mode."""
         return ReviewMode(self.mode_combo.currentData())
 
     def begin(self, data: dict) -> None:
@@ -157,6 +187,7 @@ class ReviewSupport(QObject):
         self.note_label.setText("")
 
     def totals(self) -> DamageTotals:
+        """Return totals."""
         return compute_totals(self._events, self.mode, self._decisions)
 
     # ------------------------------------------------------------------ fluxo
@@ -182,28 +213,36 @@ class ReviewSupport(QObject):
     def _emit_results(self) -> None:
         totals = self.totals()
         hits = []
-        for event, parts in final_parts(self._events, self.mode, self._decisions):
+        for event, parts in final_parts(
+            self._events, self.mode, self._decisions
+        ):
             for part in parts:
-                hits.append({
-                    "timestamp": event.timestamp,
-                    "damage": float(part.damage),
-                    "hits": part.copies,
-                    "peak": float(part.value),
-                })
+                hits.append(
+                    {
+                        "timestamp": event.timestamp,
+                        "damage": float(part.damage),
+                        "hits": part.copies,
+                        "peak": float(part.value),
+                    }
+                )
         note = self._note(totals)
         self.note_label.setText(note)
         self.hits_replaced.emit(hits)
-        self.totals_changed.emit({
-            "total_damage": float(totals.total_damage),
-            "total_hits": totals.hits,
-            "peak_damage": float(totals.peak_damage),
-            "note": note,
-        })
+        self.totals_changed.emit(
+            {
+                "total_damage": float(totals.total_damage),
+                "total_hits": totals.hits,
+                "peak_damage": float(totals.peak_damage),
+                "note": note,
+            }
+        )
 
     def _note(self, totals: DamageTotals) -> str:
         if self.mode is ReviewMode.REVIEW:
             if totals.pending_items:
-                return f"{totals.pending_items} hit(s) duvidoso(s) sem revisão."
+                return (
+                    f"{totals.pending_items} hit(s) duvidoso(s) sem revisão."
+                )
             return f"Revisão concluída ({totals.reviewed_hits} conferidos)."
         if totals.pending_items:
             return (
@@ -212,7 +251,7 @@ class ReviewSupport(QObject):
             )
         return ""
 
-    # ------------------------------------------------------------------ recortes
+    # Recortes
     def _ensure_crops_then(self, callback: Callable[[], None]) -> None:
         queue = review_queue(self._events)
         if self._crops_attempted or all(e.index in self._crops for e in queue):
@@ -251,8 +290,10 @@ class ReviewSupport(QObject):
     def _on_crops_ready(self, crops: dict) -> None:
         self._crops.update(crops)
 
-    def _on_crops_failed(self, message: str) -> None:
-        self.note_label.setText("Não foi possível extrair as imagens do vídeo.")
+    def _on_crops_failed(self, _message: str) -> None:
+        self.note_label.setText(
+            "Não foi possível extrair as imagens do vídeo."
+        )
 
     def _on_crops_thread_finished(self) -> None:
         callback = self._pending_callback
@@ -269,15 +310,20 @@ class ReviewSupport(QObject):
         if callback is not None:
             callback()
 
-    # ------------------------------------------------------------------ diálogo
+    # Diálogo
     def open_review(self) -> None:
+        """Open review."""
         queue = review_queue(self._events)
         if not queue:
             return
-        if not self._crops_attempted and any(e.index not in self._crops for e in queue):
+        if not self._crops_attempted and any(
+            e.index not in self._crops for e in queue
+        ):
             self._ensure_crops_then(self.open_review)
             return
 
+        # Carrega o diálogo somente quando a revisão é aberta.
+        # pylint: disable-next=import-outside-toplevel
         from .dialogs.damage_review_dialog import DamageReviewDialog
 
         dialog = DamageReviewDialog(
@@ -302,12 +348,17 @@ class ReviewSupport(QObject):
                 crops = self._crops.get(event.index)
                 if decision is None or not crops:
                     continue
-                if store.save(self._session, event, decision, crops, CROP_OFFSETS):
+                if store.save(
+                    self._session, event, decision, crops, CROP_OFFSETS
+                ):
                     saved += 1
         except OSError:
-            self.note_label.setText("Não foi possível gravar os exemplos de treino.")
+            self.note_label.setText(
+                "Não foi possível gravar os exemplos de treino."
+            )
             return
         if saved:
             self.note_label.setText(
-                f"{self._note(self.totals())} {saved} exemplo(s) guardado(s) para treino."
+                f"{self._note(self.totals())} {saved} exemplo(s) guardado(s)"
+                " para treino."
             )

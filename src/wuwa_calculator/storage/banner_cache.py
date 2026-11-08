@@ -17,6 +17,7 @@ MAX_IMAGE_BYTES = 6 * 1024 * 1024
 
 
 def load_cached_banner(path: Path = CACHE_FILE) -> dict[str, Any] | None:
+    """Return load cached banner."""
     try:
         if time.time() - path.stat().st_mtime > CACHE_MAX_AGE_SECONDS:
             path.unlink(missing_ok=True)
@@ -36,14 +37,22 @@ def load_cached_banner(path: Path = CACHE_FILE) -> dict[str, Any] | None:
     return payload
 
 
-def save_cached_banner(banner: dict[str, Any], path: Path = CACHE_FILE) -> None:
+def save_cached_banner(
+    banner: dict[str, Any], path: Path = CACHE_FILE
+) -> None:
+    """Save cached banner."""
     image_bytes = banner.get("image_bytes")
-    if not isinstance(image_bytes, bytes) or not image_bytes or len(image_bytes) > MAX_IMAGE_BYTES:
+    if (
+        not isinstance(image_bytes, bytes)
+        or not image_bytes
+        or len(image_bytes) > MAX_IMAGE_BYTES
+    ):
         return
     payload = {
         key: value
         for key, value in banner.items()
-        if key != "image_bytes" and isinstance(value, (str, int, float, bool, type(None)))
+        if key != "image_bytes"
+        and isinstance(value, (str, int, float, bool, type(None)))
     }
     payload["image_bytes"] = base64.b64encode(image_bytes).decode("ascii")
     try:

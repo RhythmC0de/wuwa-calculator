@@ -22,6 +22,8 @@ from wuwa_calculator.ui.workers.image_import_worker import (
 
 
 class ImportDialog(QDialog):
+    """Select an image and import recognized character attributes."""
+
     def __init__(self, parent: QWidget, character_tab: ResonatorTab) -> None:
         super().__init__(parent)
         self.character_tab = character_tab
@@ -52,6 +54,7 @@ class ImportDialog(QDialog):
         self.ocr_worker: ImageImportWorker | None = None
 
     def select_image(self) -> None:
+        """Select image."""
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Selecionar imagem",
@@ -67,7 +70,9 @@ class ImportDialog(QDialog):
         self.status_label.setText("Preparando importação...")
 
         self.ocr_thread = QThread(self)
-        self.ocr_worker = ImageImportWorker(path, self.character_tab.current_id)
+        self.ocr_worker = ImageImportWorker(
+            path, self.character_tab.current_id
+        )
         self.ocr_worker.moveToThread(self.ocr_thread)
         self.ocr_thread.started.connect(self.ocr_worker.run)
         self.ocr_worker.progress.connect(self.progress_bar.setValue)

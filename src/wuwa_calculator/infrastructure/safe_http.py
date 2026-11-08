@@ -1,4 +1,5 @@
-"""Minimal HTTPS client: allowlisted hosts, revalidated redirects, size caps."""
+"""Minimal HTTPS client: allowlisted hosts, revalidated redirects, size
+caps."""
 
 from __future__ import annotations
 
@@ -25,7 +26,11 @@ class _Redirect(urllib.request.HTTPRedirectHandler):
         self._check = check
         self.max_redirections = MAX_REDIRECTS
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+    def redirect_request(
+        self, req, fp, code, msg, headers, newurl
+    ):  # noqa: ANN001
+        # Keep the established call signature used by existing callers.
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
         if not self._check(newurl):
             raise BlockedURL(f"redirect blocked: {newurl[:80]}")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
@@ -39,11 +44,16 @@ def fetch_bytes(
     accept: str = "*/*",
     check: Callable[[str], bool] = allows_remote_content,
 ) -> bytes:
+    """Fetch an approved URL while enforcing redirects and size limits."""
     if not check(url):
         raise BlockedURL(f"url not allowed: {url[:80]}")
     opener = urllib.request.build_opener(_Redirect(check))
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": accept})
-    with opener.open(request, timeout=timeout) as response:  # nosec B310 - validated above
+    request = urllib.request.Request(
+        url, headers={"User-Agent": USER_AGENT, "Accept": accept}
+    )
+    with opener.open(
+        request, timeout=timeout
+    ) as response:  # nosec B310 - validated above
         declared = response.headers.get("Content-Length")
         if declared and declared.isdigit() and int(declared) > max_bytes:
             raise ValueError("response too large")
@@ -54,18 +64,40 @@ def fetch_bytes(
 
 
 def fetch_json(url: str, *, timeout: float = 8) -> Any:
-    return json.loads(fetch_bytes(url, max_bytes=MAX_JSON_BYTES, timeout=timeout, accept="application/json").decode("utf-8"))
+    """Download bounded JSON from an approved URL and decode it."""
+    return json.loads(
+        fetch_bytes(
+            url,
+            max_bytes=MAX_JSON_BYTES,
+            timeout=timeout,
+            accept="application/json",
+        ).decode("utf-8")
+    )
 
 
 def fetch_image_bytes(url: str, *, timeout: float = 10) -> bytes:
-    return fetch_bytes(url, max_bytes=MAX_IMAGE_BYTES, timeout=timeout, accept="image/*")
+    """Download image bytes from an approved URL with a size cap."""
+    return fetch_bytes(
+        url, max_bytes=MAX_IMAGE_BYTES, timeout=timeout, accept="image/*"
+    )
 
 
 def fetch_text(url: str, *, timeout: float = 12) -> str:
-    return fetch_bytes(url, max_bytes=MAX_HTML_BYTES, timeout=timeout, accept="text/html").decode("utf-8", errors="replace")
+    """Download bounded HTML and replace invalid UTF-8 sequences."""
+    return fetch_bytes(
+        url, max_bytes=MAX_HTML_BYTES, timeout=timeout, accept="text/html"
+    ).decode("utf-8", errors="replace")
 
 
-def post_json(url: str, body: dict[str, Any], *, timeout: float = 10, check: Callable[[str], bool], max_bytes: int = MAX_JSON_BYTES) -> Any:
+def post_json(
+    url: str,
+    body: dict[str, Any],
+    *,
+    timeout: float = 10,
+    check: Callable[[str], bool],
+    max_bytes: int = MAX_JSON_BYTES,
+) -> Any:
+    """POST JSON to an approved endpoint and decode a bounded response."""
     if not check(url):
         raise BlockedURL(f"url not allowed: {url[:80]}")
     opener = urllib.request.build_opener(_Redirect(check))

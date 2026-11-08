@@ -5,7 +5,8 @@ It is reloaded by the desktop application when the processing logic changes.
 """
 
 # ! Keep this module independent from Qt, network requests and UI widgets.
-# * EDITAVEL: altere formulas aqui e valide os resultados antes de ligar a interface.
+# * EDITAVEL: altere formulas aqui e valide os resultados antes de ligar
+# a interface.
 
 from __future__ import annotations
 
@@ -14,6 +15,10 @@ from dataclasses import dataclass
 
 @dataclass
 class DamageResult:
+    """Damage components, rotation total, and expected DPS."""
+
+    # Fields mirror the persisted or externally consumed data schema.
+    # pylint: disable=too-many-instance-attributes
     base_per_hit: float
     non_critical_per_hit: float
     average_per_hit: float
@@ -30,6 +35,8 @@ class DamageResult:
 
 @dataclass
 class ManualDamageResult:
+    """Per-hit damage, total damage, and DPS from manual inputs."""
+
     damage_per_hit: float
     total_damage: float
     dps: float
@@ -37,6 +44,8 @@ class ManualDamageResult:
 
 @dataclass
 class RotationStep:
+    """Ability modifier, bonuses, and hit count for a rotation step."""
+
     name: str
     skill_modifier: float
     damage_bonus: float = 0.0
@@ -45,6 +54,10 @@ class RotationStep:
 
 @dataclass
 class RotationParameters:
+    """Attacker attributes and target multipliers for a rotation."""
+
+    # Fields mirror the persisted or externally consumed data schema.
+    # pylint: disable=too-many-instance-attributes
     base_attack: float = 10000.0
     attack_bonus_percent: float = 0.0
     attack_bonus_flat: float = 0.0
@@ -59,6 +72,8 @@ class RotationParameters:
 
 @dataclass
 class RotationStepResult:
+    """Expected damage and DPS for one named rotation step."""
+
     name: str
     damage_per_hit: float
     total_damage: float
@@ -71,7 +86,11 @@ def calculate_rotation_step(
     duration: float = 1.0,
 ) -> RotationStepResult:
     """Calculate one rotation step using team buffs and enemy debuffs."""
-    attack_total = max(0.0, parameters.base_attack * (1.0 + parameters.attack_bonus_percent / 100.0))
+    attack_total = max(
+        0.0,
+        parameters.base_attack
+        * (1.0 + parameters.attack_bonus_percent / 100.0),
+    )
     attack_total += max(0.0, parameters.attack_bonus_flat)
     total_bonus = (
         max(0.0, parameters.elemental_bonus)
@@ -80,12 +99,21 @@ def calculate_rotation_step(
     ) / 100.0
     defense_factor = max(0.0, parameters.defense_factor)
     resistance_factor = max(0.0, parameters.resistance_factor)
-    vulnerability_multiplier = 1.0 + max(0.0, parameters.vulnerability_bonus) / 100.0
+    vulnerability_multiplier = (
+        1.0 + max(0.0, parameters.vulnerability_bonus) / 100.0
+    )
     non_critical = attack_total * max(0.0, step.skill_modifier) / 100.0
-    non_critical *= (1.0 + total_bonus) * defense_factor * resistance_factor * vulnerability_multiplier
+    non_critical *= (
+        (1.0 + total_bonus)
+        * defense_factor
+        * resistance_factor
+        * vulnerability_multiplier
+    )
     crit_multiplier = max(1.0, 1.0 + max(0.0, parameters.crit_damage) / 100.0)
     crit_rate = max(0.0, min(100.0, parameters.crit_rate)) / 100.0
-    average_damage = non_critical * ((1.0 - crit_rate) + crit_rate * crit_multiplier)
+    average_damage = non_critical * (
+        (1.0 - crit_rate) + crit_rate * crit_multiplier
+    )
     total_damage = average_damage * max(1, int(step.hits))
     return RotationStepResult(
         name=step.name,
@@ -101,16 +129,22 @@ def calculate_rotation_peak(
     hit_count: int,
     duration: float,
 ) -> list[RotationStepResult]:
-    """Cycle rotation steps across observed hits to produce theoretical peaks."""
+    """
+    Cycle rotation steps across observed hits to produce theoretical
+    peaks.
+    """
     if not steps:
         return []
     return [
-        calculate_rotation_step(parameters, steps[index % len(steps)], duration)
+        calculate_rotation_step(
+            parameters, steps[index % len(steps)], duration
+        )
         for index in range(max(0, int(hit_count)))
     ]
 
 
 def parse_number(value: str, default: float = 0.0) -> float:
+    """Parse a numeric input, using the supplied default if invalid."""
     try:
         return float(value.replace(",", ".").strip())
     except (AttributeError, ValueError):
@@ -130,6 +164,9 @@ def calculate_damage(
     rotation_seconds: float,
 ) -> DamageResult:
     """Calculate damage for one ability and its rotation contribution."""
+    # Keep the established call signature used by existing callers.
+    # pylint: disable=too-many-arguments,too-many-locals
+    # pylint: disable=too-many-positional-arguments
     attack_total = max(0.0, attack)
     skill_modifier = max(0.0, scaling) / 100.0
     damage_bonus = max(0.0, flat_bonus) / 100.0
@@ -185,9 +222,12 @@ def calculate_manual_damage(
     duration: float,
 ) -> ManualDamageResult:
     """Apply the character-tab formula using manually entered build values."""
+    # Keep the established call signature used by existing callers.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     damage_per_hit = (
         max(0.0, attack_total)
-        * max(0.0, skill_modifier) / 100.0
+        * max(0.0, skill_modifier)
+        / 100.0
         * (1.0 + max(0.0, damage_bonus) / 100.0)
         * max(0.0, crit_multiplier)
         * max(0.0, defense_factor)

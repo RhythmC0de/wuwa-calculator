@@ -6,11 +6,17 @@ English: Native QtMultimedia player for the rotation history screen.
 from __future__ import annotations
 
 import os
-import sys
-from importlib import import_module
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSignalBlocker, QThread, QTimer, Qt, QUrl, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QSignalBlocker,
+    Qt,
+    QThread,
+    QTimer,
+    QUrl,
+    Signal,
+)
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
@@ -21,13 +27,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSlider, QStyle,
+    QSlider,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
-
-# Allow direct execution from the app/ directory while keeping package imports
-# as the canonical path used by the Tethys launcher.
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel
 
@@ -39,7 +43,10 @@ class ClickableSeekSlider(QSlider):
     """
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self.maximum() > self.minimum():
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self.maximum() > self.minimum()
+        ):
             value = QStyle.sliderValueFromPosition(
                 self.minimum(),
                 self.maximum(),
@@ -79,10 +86,9 @@ class _NativeAnalysisThread(QThread):
         try:
             # O localizador procura a extensão compilada em Windows e Linux
             # (native/damage_analyzer/build) sem depender de PYTHONPATH.
-            try:
-                from ...infrastructure import native_engine
-            except ImportError:
-                import native_engine  # type: ignore[no-redef]
+            # Carrega a engine nativa somente quando a análise começa.
+            # pylint: disable-next=import-outside-toplevel
+            from wuwa_calculator.infrastructure import native_engine
 
             damage_analyzer = native_engine.load_engine()
 
@@ -106,6 +112,8 @@ class _NativeAnalysisThread(QThread):
             if self._cancel_requested:
                 return
             self.completed.emit(result)
+        # Thread boundary: relay every worker failure through its Qt signal.
+        # pylint: disable-next=broad-exception-caught
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}")
 
@@ -116,6 +124,8 @@ class HistoryVideoPlayer(Card):
     English: Embeddable local player backed exclusively by QtMultimedia.
     """
 
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
     videoLoaded = Signal(str)
     videoStopped = Signal()
     analysisCompleted = Signal(object)
@@ -135,7 +145,9 @@ class HistoryVideoPlayer(Card):
         self._fullscreen_hide_timer = QTimer(self)
         self._fullscreen_hide_timer.setSingleShot(True)
         self._fullscreen_hide_timer.setInterval(2500)
-        self._fullscreen_hide_timer.timeout.connect(self._hide_fullscreen_overlay)
+        self._fullscreen_hide_timer.timeout.connect(
+            self._hide_fullscreen_overlay
+        )
 
         self.media_player = QMediaPlayer(self)
         self.audio_output = QAudioOutput(self)
@@ -146,6 +158,8 @@ class HistoryVideoPlayer(Card):
         self._connect_signals()
 
     def _build_ui(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-statements
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 16)
         layout.setSpacing(10)
@@ -165,9 +179,13 @@ class HistoryVideoPlayer(Card):
         self.video_surface.setMouseTracking(True)
         self.video_surface.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.video_surface.installEventFilter(self)
-        self.video_surface.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        self.video_surface.setAspectRatioMode(
+            Qt.AspectRatioMode.KeepAspectRatio
+        )
         self.media_player.setVideoOutput(self.video_surface)
-        self.hud_label = QLabel("LIVE ANALYZER  //  60 FPS", self.video_surface)
+        self.hud_label = QLabel(
+            "LIVE ANALYZER  //  60 FPS", self.video_surface
+        )
         self.hud_label.setObjectName("videoHud")
         self.hud_label.setFixedHeight(26)
         self._position_video_hud()
@@ -198,8 +216,8 @@ class HistoryVideoPlayer(Card):
         self.stop_button.setText("■")
         self.stop_button.setToolTip("Parar vídeo")
         self.stop_button.setFixedWidth(42)
-        self.play_button.setEnabled(False)
-        self.stop_button.setEnabled(False)
+        for button in (self.play_button, self.stop_button):
+            button.setEnabled(False)
         controls.addWidget(self.browse_button)
         controls.addWidget(self.play_button)
         controls.addWidget(self.stop_button)
@@ -209,7 +227,9 @@ class HistoryVideoPlayer(Card):
         # [EXTRAIR] abaixo para mover a integração para um serviço separado.
         self.analyze_button = self._button("Analisar")
         self.analyze_button.setObjectName("mediaAnalyzeButton")
-        self.analyze_button.setToolTip("Analisar os números de dano deste vídeo")
+        self.analyze_button.setToolTip(
+            "Analisar os números de dano deste vídeo"
+        )
         self.analyze_button.setEnabled(False)
         controls.addWidget(self.analyze_button)
         controls.addWidget(self.progress_slider, 1)
@@ -258,7 +278,9 @@ class HistoryVideoPlayer(Card):
     def _build_fullscreen_overlay(self) -> None:
         self.fullscreen_overlay = QWidget(self.video_surface)
         self.fullscreen_overlay.setObjectName("fullscreenOverlay")
-        self.fullscreen_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.fullscreen_overlay.setAttribute(
+            Qt.WidgetAttribute.WA_StyledBackground, True
+        )
         self.fullscreen_overlay.setMouseTracking(True)
         self.fullscreen_overlay.installEventFilter(self)
         overlay_layout = QHBoxLayout(self.fullscreen_overlay)
@@ -276,7 +298,9 @@ class HistoryVideoPlayer(Card):
         self.fullscreen_time_label.setFixedWidth(82)
         overlay_layout.addWidget(self.fullscreen_time_label)
 
-        self.fullscreen_progress = ClickableSeekSlider(Qt.Orientation.Horizontal)
+        self.fullscreen_progress = ClickableSeekSlider(
+            Qt.Orientation.Horizontal
+        )
         self.fullscreen_progress.setObjectName("fullscreenProgress")
         self.fullscreen_progress.setRange(0, 0)
         overlay_layout.addWidget(self.fullscreen_progress, 1)
@@ -295,16 +319,25 @@ class HistoryVideoPlayer(Card):
         self.fullscreen_exit_button.setToolTip("Sair da tela cheia (Esc)")
         overlay_layout.addWidget(self.fullscreen_exit_button)
         self.fullscreen_overlay.hide()
-        for widget in [self.fullscreen_overlay, *self.fullscreen_overlay.findChildren(QWidget)]:
+        for widget in [
+            self.fullscreen_overlay,
+            *self.fullscreen_overlay.findChildren(QWidget),
+        ]:
             widget.setMouseTracking(True)
             widget.installEventFilter(self)
 
     def _configure_video_surface(self) -> None:
-        self.video_surface.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
-        self.video_surface.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, False)
+        self.video_surface.setAttribute(
+            Qt.WidgetAttribute.WA_OpaquePaintEvent, False
+        )
+        self.video_surface.setAttribute(
+            Qt.WidgetAttribute.WA_NoSystemBackground, False
+        )
         self.video_surface.setAutoFillBackground(False)
         self.video_surface.setUpdatesEnabled(True)
-        self.video_surface.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, False)
+        self.video_surface.setAttribute(
+            Qt.WidgetAttribute.WA_NativeWindow, False
+        )
 
     def _refresh_video_surface(self) -> None:
         self.video_surface.update()
@@ -327,21 +360,30 @@ class HistoryVideoPlayer(Card):
         self.progress_slider.sliderReleased.connect(self._commit_seek)
         self.media_player.positionChanged.connect(self._on_position_changed)
         self.media_player.durationChanged.connect(self._on_duration_changed)
-        self.media_player.playbackStateChanged.connect(self._on_playback_state_changed)
-        self.media_player.mediaStatusChanged.connect(self._on_media_status_changed)
+        self.media_player.playbackStateChanged.connect(
+            self._on_playback_state_changed
+        )
+        self.media_player.mediaStatusChanged.connect(
+            self._on_media_status_changed
+        )
         self.media_player.errorOccurred.connect(self._on_error)
         self.media_player.tracksChanged.connect(self._populate_subtitles)
         self.subtitle_box.currentIndexChanged.connect(self._select_subtitle)
         self.fullscreen_button.clicked.connect(self.enter_fullscreen)
         self.fullscreen_play_button.clicked.connect(self.toggle_playback)
         self.fullscreen_exit_button.clicked.connect(self.exit_fullscreen)
-        self.fullscreen_progress.sliderMoved.connect(self.media_player.setPosition)
+        self.fullscreen_progress.sliderMoved.connect(
+            self.media_player.setPosition
+        )
         self.fullscreen_progress.sliderReleased.connect(
-            lambda: self.media_player.setPosition(self.fullscreen_progress.value())
+            lambda: self.media_player.setPosition(
+                self.fullscreen_progress.value()
+            )
         )
         self.fullscreen_volume.valueChanged.connect(self.set_volume)
 
     def choose_video(self) -> None:
+        """Ask the user to select a local video file."""
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Selecionar vídeo de referência",
@@ -352,8 +394,11 @@ class HistoryVideoPlayer(Card):
             self.load_video(path)
 
     def load_video(self, path: str) -> bool:
+        """Load a video and update its playback controls."""
         if self._analysis_running:
-            self._set_status("Aguarde a análise atual terminar antes de trocar o vídeo")
+            self._set_status(
+                "Aguarde a análise atual terminar antes de trocar o vídeo"
+            )
             return False
         if not os.path.isfile(path):
             self._set_status("Arquivo de vídeo não encontrado")
@@ -373,14 +418,19 @@ class HistoryVideoPlayer(Card):
         return True
 
     def toggle_playback(self) -> None:
+        """Toggle playback between the playing and paused states."""
         if not self.video_path:
             return
-        if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+        if (
+            self.media_player.playbackState()
+            == QMediaPlayer.PlaybackState.PlayingState
+        ):
             self.media_player.pause()
         else:
             self.media_player.play()
 
     def stop_video(self) -> None:
+        """Stop playback and reset the current position."""
         self.exit_fullscreen()
         self._source_ready = False
         self.media_player.stop()
@@ -403,6 +453,7 @@ class HistoryVideoPlayer(Card):
         self.videoStopped.emit()
 
     def enter_fullscreen(self) -> None:
+        """Move the video into its full-screen playback view."""
         if self._is_fullscreen:
             self._show_fullscreen_overlay()
             return
@@ -412,6 +463,7 @@ class HistoryVideoPlayer(Card):
         self._show_fullscreen_overlay()
 
     def exit_fullscreen(self) -> None:
+        """Restore the video to the embedded playback view."""
         if not self._is_fullscreen and not self.video_surface.isFullScreen():
             return
         self._is_fullscreen = False
@@ -448,23 +500,36 @@ class HistoryVideoPlayer(Card):
             self.fullscreen_overlay,
             *self.fullscreen_overlay.findChildren(QWidget),
         }:
-            if event.type() in {QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress, QEvent.Type.Enter}:
+            if event.type() in {
+                QEvent.Type.MouseMove,
+                QEvent.Type.MouseButtonPress,
+                QEvent.Type.Enter,
+            }:
                 self._show_fullscreen_overlay()
-            elif event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            elif (
+                event.type() == QEvent.Type.KeyPress
+                and event.key() == Qt.Key.Key_Escape
+            ):
                 self.exit_fullscreen()
                 return True
-            elif watched is self.video_surface and event.type() == QEvent.Type.Resize:
+            elif (
+                watched is self.video_surface
+                and event.type() == QEvent.Type.Resize
+            ):
                 self._position_fullscreen_overlay()
         return super().eventFilter(watched, event)
 
     def set_volume(self, value: int) -> None:
+        """Apply the selected audio volume to the player."""
         self.audio_output.setVolume(max(0, min(100, int(value))) / 100.0)
 
     def _begin_seek(self) -> None:
         self.is_dragging = True
 
     def _preview_seek(self, value: int) -> None:
-        self.time_label.setText(f"{self._clock(value)} / {self._clock(self.duration_ms)}")
+        self.time_label.setText(
+            f"{self._clock(value)} / {self._clock(self.duration_ms)}"
+        )
 
     def _commit_seek(self) -> None:
         if self.duration_ms > 0:
@@ -472,20 +537,32 @@ class HistoryVideoPlayer(Card):
         self.is_dragging = False
 
     def seek_to_seconds(self, seconds: float) -> None:
-        """Seek the loaded video to a timestamp supplied by an external control."""
+        """
+        Seek the loaded video to a timestamp supplied by an external
+        control.
+        """
         if self.duration_ms <= 0:
             return
-        position_ms = max(0, min(self.duration_ms, round(float(seconds) * 1000)))
+        position_ms = max(
+            0, min(self.duration_ms, round(float(seconds) * 1000))
+        )
         self.media_player.setPosition(position_ms)
 
     def _on_position_changed(self, position_ms: int) -> None:
-        if not self._source_ready or not self.video_path or self.duration_ms <= 0:
+        if (
+            not self._source_ready
+            or not self.video_path
+            or self.duration_ms <= 0
+        ):
             return
         if not self.is_dragging and not self.progress_slider.isSliderDown():
             self.progress_slider.setValue(position_ms)
             display_second = position_ms // 1000
             if display_second != self._last_display_second:
-                display_time = f"{self._clock(position_ms)} / {self._clock(self.duration_ms)}"
+                display_time = (
+                    f"{self._clock(position_ms)} /"
+                    f" {self._clock(self.duration_ms)}"
+                )
                 self.time_label.setText(display_time)
                 self.fullscreen_time_label.setText(display_time)
                 self._last_display_second = display_second
@@ -497,13 +574,19 @@ class HistoryVideoPlayer(Card):
         self._source_ready = self.duration_ms > 0 and bool(self.video_path)
         self.progress_slider.setRange(0, self.duration_ms)
         self.fullscreen_progress.setRange(0, self.duration_ms)
-        self.time_label.setText(f"{self._clock(self.media_player.position())} / {self._clock(self.duration_ms)}")
+        self.time_label.setText(
+            f"{self._clock(self.media_player.position())} /"
+            f" {self._clock(self.duration_ms)}"
+        )
         self.fullscreen_time_label.setText(
-            f"{self._clock(self.media_player.position())} / {self._clock(self.duration_ms)}"
+            f"{self._clock(self.media_player.position())} /"
+            f" {self._clock(self.duration_ms)}"
         )
         self._last_display_second = self.media_player.position() // 1000
 
-    def _on_playback_state_changed(self, state: QMediaPlayer.PlaybackState) -> None:
+    def _on_playback_state_changed(
+        self, state: QMediaPlayer.PlaybackState
+    ) -> None:
         playing = state == QMediaPlayer.PlaybackState.PlayingState
         paused = state == QMediaPlayer.PlaybackState.PausedState
         self.play_button.setText("Ⅱ" if playing else "▶")
@@ -513,7 +596,9 @@ class HistoryVideoPlayer(Card):
         elif playing:
             self._set_status("Reproduzindo")
 
-    def _on_media_status_changed(self, status: QMediaPlayer.MediaStatus) -> None:
+    def _on_media_status_changed(
+        self, status: QMediaPlayer.MediaStatus
+    ) -> None:
         if status in {
             QMediaPlayer.MediaStatus.LoadedMedia,
             QMediaPlayer.MediaStatus.BufferedMedia,
@@ -534,7 +619,10 @@ class HistoryVideoPlayer(Card):
             self.subtitle_box.clear()
             self.subtitle_box.addItem("Legendas desativadas", -1)
             for index, track in enumerate(tracks):
-                description = track.stringValue(track.Key.Title) or f"Legenda {index + 1}"
+                description = (
+                    track.stringValue(track.Key.Title)
+                    or f"Legenda {index + 1}"
+                )
                 self.subtitle_box.addItem(description, index)
 
     def _select_subtitle(self, index: int) -> None:
@@ -553,8 +641,10 @@ class HistoryVideoPlayer(Card):
     def analyze_video(self) -> None:
         """Executa a engine nativa sem bloquear o loop de eventos do Qt.
 
-        A extensão ``damage_analyzer`` deve estar compilada/instalável no
-        ambiente Python. O processamento de frames/OCR/filtros permanece em C++.
+        A extensão ``damage_analyzer`` deve estar compilada/instalável
+        no
+        ambiente Python. O processamento de frames/OCR/filtros permanece
+        em C++.
         """
         if not self.video_path or not os.path.isfile(self.video_path):
             self._set_status("Selecione um vídeo válido antes de analisar")
@@ -575,11 +665,15 @@ class HistoryVideoPlayer(Card):
         thread.start()
 
     def _on_analysis_completed(self, result: object) -> None:
-        """Publica resultado da engine sem acoplar o player ao painel de DPS."""
+        """
+        Publica resultado da engine sem acoplar o player ao painel de
+        DPS.
+        """
         total = getattr(result, "total_damage", 0)
         hits = getattr(result, "total_hits", 0)
-        peak = getattr(result, "peak_damage", 0)
-        self._set_status(f"Análise concluída · {hits} acertos · dano {total:,.0f}")
+        self._set_status(
+            f"Análise concluída · {hits} acertos · dano {total:,.0f}"
+        )
         self.hud_label.setText("DAMAGE ANALYSIS  //  COMPLETE")
         self.analysisCompleted.emit(result)
 

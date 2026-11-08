@@ -1,22 +1,24 @@
 """Reusable PySide6 presentation components."""
 
 import logging
-import os
-import sys
 import math
+import traceback
 from collections.abc import Iterable
 from datetime import datetime, timezone
-from pathlib import Path
 
-
-from PySide6.QtCore import Qt, QTimer, QByteArray, QRect, QRectF, QPropertyAnimation, QSequentialAnimationGroup, QEasingCurve
+from PySide6.QtCore import QByteArray, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (
-    QPixmap, QPainter, QBrush, QColor, QBitmap, QPainterPath,
-    QLinearGradient, QRadialGradient, QPen,
+    QBrush,
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QRadialGradient,
 )
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QTableWidget,
@@ -25,12 +27,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from wuwa_calculator.ui.styles.styles import CARD, apply_element_glow, apply_glow
 from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
-
+from wuwa_calculator.ui.rendering import (
+    apply_alpha_mask,
+    transparent_pixmap,
+)
+from wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
 
 log = logging.getLogger(__name__)
-HOLOGRAM_INTERVAL_MS = 66  # ~15 fps: enough for the sheen, half the repaint cost of 50 ms
+HOLOGRAM_INTERVAL_MS = (
+    66  # ~15 fps: enough for the sheen, half the repaint cost of 50 ms
+)
 
 
 ELEMENT_UI_COLORS = {
@@ -56,21 +63,22 @@ _BANNER_RADIUS = 16.0
 
 def _banner_clip_path(width: int, height: int) -> QPainterPath:
     path = QPainterPath()
-    path.addRoundedRect(QRectF(0, 0, width, height), _BANNER_RADIUS, _BANNER_RADIUS)
+    path.addRoundedRect(
+        QRectF(0, 0, width, height), _BANNER_RADIUS, _BANNER_RADIUS
+    )
     return path
 
 
 def _apply_rounded_widget_mask(widget: QWidget) -> None:
-    mask = QPixmap(widget.size())
-    mask.fill(Qt.GlobalColor.transparent)
+    mask = transparent_pixmap(widget.size())
     painter = QPainter(mask)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    painter.fillPath(_banner_clip_path(widget.width(), widget.height()), Qt.GlobalColor.white)
+    painter.fillPath(
+        _banner_clip_path(widget.width(), widget.height()),
+        Qt.GlobalColor.white,
+    )
     painter.end()
-    widget.setMask(mask.createMaskFromColor(
-        QColor(Qt.GlobalColor.transparent),
-        Qt.MaskMode.MaskInColor,
-    ))
+    apply_alpha_mask(widget, mask)
 
 
 def _character_element(name: str, element: str | None) -> str:
@@ -80,27 +88,30 @@ def _character_element(name: str, element: str | None) -> str:
 
 
 def _create_rounded_pixmap(pixmap: QPixmap, radius: int = 16) -> QPixmap:
-    """Cria um pixmap com cantos arredondados (estilo parenteses ( )) com sombra 3D moderada."""
-    log.debug(f"[_create_rounded_pixmap] Aplicando cantos ( ) com sombra 3D moderada")
-    
+    """Cria um pixmap com cantos arredondados (estilo parenteses ( )) com
+    sombra 3D moderada."""
+    log.debug(
+        "[_create_rounded_pixmap] Aplicando cantos ( ) com sombra 3D moderada"
+    )
+
     if pixmap.isNull():
         return pixmap
-    
+
     size = pixmap.size()
     width, height = size.width(), size.height()
-    
+
     # Cria pixmap com tamanho EXATO (960x440)
     result = QPixmap(width, height)
     result.fill(Qt.transparent)
-    
+
     painter = QPainter(result)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-    
+
     # Cria caminho arredondado (parenteses ( ))
     path = QPainterPath()
     path.addRoundedRect(QRectF(0, 0, width, height), radius, radius)
-    
+
     # Desenha a imagem com cantos recortados
     painter.setClipPath(path)
     painter.drawPixmap(0, 0, pixmap)
@@ -109,26 +120,34 @@ def _create_rounded_pixmap(pixmap: QPixmap, radius: int = 16) -> QPixmap:
 
     # Desenha sombra 3D moderada (não fraca, não forte)
     # Cria gradiente de sombra apenas nas bordas para efeito de profundidade
-    shadow_color = QColor(0, 0, 0, 50)  # Aumentado de 25 para 50 (mais visível)
+    shadow_color = QColor(
+        0, 0, 0, 50
+    )  # Aumentado de 25 para 50 (mais visível)
     painter.setPen(Qt.NoPen)
     painter.fillPath(path, shadow_color)
-    
+
     # Desenha borda suave para reforçar o efeito 3D
     pen = painter.pen()
     pen.setColor(QColor(0, 0, 0, 30))
     pen.setWidth(1)
     painter.setPen(pen)
     painter.drawPath(path)
-    
+
     painter.end()
-    
-    log.debug(f"[_create_rounded_pixmap] Imagem 960x440 com cantos ( ) e sombra 3D criada")
+
+    log.debug(
+        "[_create_rounded_pixmap] Imagem 960x440 com cantos ( ) e sombra 3D"
+        " criada"
+    )
     return result
 
 
 class Card(QFrame):
-    def __init__(self, parent: QWidget | None = None,
-                 glow: bool = True) -> None:
+    """Styled container shared by application panels."""
+
+    def __init__(
+        self, parent: QWidget | None = None, glow: bool = True
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("card")
         if glow:
@@ -136,16 +155,18 @@ class Card(QFrame):
 
 
 class TitleLabel(QLabel):
-    def __init__(self, text: str,
-                 parent: QWidget | None = None) -> None:
+    """Heading label using the application title style."""
+
+    def __init__(self, text: str, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
         self.setObjectName("title")
         apply_glow(self, blur=10, opacity=90)
 
 
 class MetricCard(Card):
-    def __init__(self, title: str,
-                 parent: QWidget | None = None) -> None:
+    """Display a metric title and its current value."""
+
+    def __init__(self, title: str, parent: QWidget | None = None) -> None:
         super().__init__(parent, glow=False)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -158,8 +179,11 @@ class MetricCard(Card):
 
 
 class DataTable(QTableWidget):
-    def __init__(self, headers: Iterable[str],
-                 parent: QWidget | None = None) -> None:
+    """Read-only table for displaying calculated rows."""
+
+    def __init__(
+        self, headers: Iterable[str], parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         labels = list(headers)
         self.setColumnCount(len(labels))
@@ -171,16 +195,18 @@ class DataTable(QTableWidget):
         self.horizontalHeader().setStretchLastSection(True)
 
     def replace_rows(self, rows: list[list[str]]) -> None:
+        """Replace rows."""
         self.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
             for column_index, value in enumerate(row):
-                self.setItem(row_index,
-                             column_index,
-                             QTableWidgetItem(str(value)))
+                self.setItem(
+                    row_index, column_index, QTableWidgetItem(str(value))
+                )
         self.resizeColumnsToContents()
 
 
 def form_row(*widgets: QWidget) -> QHBoxLayout:
+    """Add a labeled field to a form layout."""
     layout = QHBoxLayout()
     layout.setSpacing(8)
     for widget in widgets:
@@ -189,38 +215,63 @@ def form_row(*widgets: QWidget) -> QHBoxLayout:
 
 
 class WuWaKuroBannerCard(QFrame):
-    """Banner card com moldura e imagem em perfeita harmonia para Wuthering Waves."""
-    
-    def __init__(self, character_name: str, image_bytes: bytes, end_date: datetime,
-                 banner_start: datetime | None = None, element: str | None = None,
-                 parent=None):
+    """Banner card com moldura e imagem em perfeita harmonia para Wuthering
+    Waves."""
+
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
+    def __init__(
+        self,
+        character_name: str,
+        image_bytes: bytes,
+        end_date: datetime,
+        banner_start: datetime | None = None,
+        element: str | None = None,
+        parent=None,
+    ):
+        # Keep the established call signature used by existing callers.
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
+        # pylint: disable=too-many-statements
         super().__init__(parent)
-        log.debug(f"[WuWaKuroBannerCard] Inicializando com character_name={character_name}, image_bytes={len(image_bytes) if isinstance(image_bytes, bytes) else 'INVÁLIDO'} bytes")
+        image_size = (
+            len(image_bytes) if isinstance(image_bytes, bytes) else "INVÁLIDO"
+        )
+        log.debug(
+            "[WuWaKuroBannerCard] Inicializando com character_name=%s,"
+            " image_bytes=%s bytes",
+            character_name,
+            image_size,
+        )
         self.end_date = end_date
         self.banner_start = banner_start
         self.element = _character_element(character_name, element)
         self.element_color, element_background = ELEMENT_UI_COLORS.get(
             self.element, ELEMENT_UI_COLORS["Spectro"]
         )
-        self.element_background = element_background.replace(", 225)", ", 195)")
+        self.element_background = element_background.replace(
+            ", 225)", ", 195)"
+        )
         self.element_border = self.element_color
         self.number_color = ELEMENT_NUMBER_COLORS.get(self.element, "#FFFFFF")
         self.banner_width = 960
-        
+
         self.setObjectName("KuroHomeSection")
         self.setFixedWidth(960)
         self.setFixedHeight(440)
         self.setStyleSheet("background: transparent;")
-        
+
         # Layout vertical principal da seção
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(12)
-        
-        # --- 1. CONTAINER DA IMAGEM E MOLDURA UNIFICADOS (Overlay Perfeito) ---
+
+        # --- 1. CONTAINER DA IMAGEM E MOLDURA UNIFICADOS (Overlay
+        # Perfeito) ---
         self.img_container = QFrame(self)
         self.img_container.setFixedSize(960, 440)
-        self.img_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.img_container.setAttribute(
+            Qt.WidgetAttribute.WA_StyledBackground, True
+        )
         _apply_rounded_widget_mask(self.img_container)
         self.img_container.setStyleSheet("""
             QFrame {
@@ -230,13 +281,17 @@ class WuWaKuroBannerCard(QFrame):
                 border: none;
             }
         """)
-        
+
         container_layout = QVBoxLayout(self.img_container)
-        container_layout.setContentsMargins(0, 0, 0, 0) # Margem rigorosamente zerada para colar nas bordas
+        container_layout.setContentsMargins(
+            0, 0, 0, 0
+        )  # Margem rigorosamente zerada para colar nas bordas
         container_layout.setSpacing(0)
-        
+
         self.img_label = QLabel(self.img_container)
-        self.img_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)  # Cola no canto superior esquerdo
+        self.img_label.setAlignment(
+            Qt.AlignTop | Qt.AlignLeft
+        )  # Cola no canto superior esquerdo
         self.img_label.setScaledContents(False)  # Não escalona automaticamente
         self.img_label.setStyleSheet("""
             QLabel {
@@ -248,21 +303,26 @@ class WuWaKuroBannerCard(QFrame):
         """)
         self.img_label.setFixedSize(960, 440)
         container_layout.addWidget(self.img_label)
-        
+
         # --- HOLOGRAM OVERLAY (Efeito prismatico animado) ---
         self.hologram_overlay = QLabel(self.img_container)
         self.hologram_overlay.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.hologram_overlay.setFixedSize(960, 440)
         self.hologram_overlay.setStyleSheet("background: transparent;")
-        self.hologram_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hologram_overlay.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
         self.hologram_overlay.setGeometry(0, 0, 960, 440)
         self._apply_hologram_mask()
         self.hologram_overlay.raise_()
 
         self.countdown_label = QLabel(self.img_container)
         self.countdown_label.setFixedHeight(40)
-        self.countdown_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.countdown_label.setStyleSheet("""
+        self.countdown_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.countdown_label.setStyleSheet(
+            """
             QLabel {
                 color: %s;
                 font-family: 'Segoe UI';
@@ -273,72 +333,104 @@ class WuWaKuroBannerCard(QFrame):
                 border-radius: 6px;
                 border: 1px solid %s;
             }
-        """ % (self.element_color, self.element_background, self.element_color))
-        apply_element_glow(self.countdown_label, self.element, blur=8.0, opacity=110)
+        """ % (self.element_color, self.element_background, self.element_color)
+        )
+        apply_element_glow(
+            self.countdown_label, self.element, blur=8.0, opacity=110
+        )
         self._position_countdown()
         self.countdown_label.raise_()
-        
+
         # Cria o efeito holografico prismatico
         self.hologram_phase = 0.0
         self._create_hologram_effect()
-        
+
         # Timer para animar o holograma continuamente
         self.hologram_timer = QTimer(self)
         self.hologram_timer.timeout.connect(self._update_hologram)
         self.hologram_timer.start(HOLOGRAM_INTERVAL_MS)
-        
+
         self.load_image_from_bytes(image_bytes, character_name)
-        
+
         main_layout.addWidget(self.img_container)
-        
+
         # Timer em tempo real segundo a segundo
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh_realtime_clock)
         self.timer.start(1000)
         self.refresh_realtime_clock()
-        log.debug(f"[WuWaKuroBannerCard] [OK] Inicializacao completa!")
+        log.debug("[WuWaKuroBannerCard] [OK] Inicializacao completa!")
 
     def _position_countdown(self) -> None:
         margin = 12
-        x = max(margin, self.banner_width - self.countdown_label.width() - margin)
+        x = max(
+            margin, self.banner_width - self.countdown_label.width() - margin
+        )
         self.countdown_label.move(x, margin)
 
     def load_image_from_bytes(self, image_bytes: bytes, fallback_name: str):
         """Carrega imagem a partir de bytes já carregados em memória."""
-        log.debug(f"[WuWaKuroBannerCard] load_image_from_bytes chamado com {len(image_bytes)} bytes")
+        log.debug(
+            "[WuWaKuroBannerCard] load_image_from_bytes chamado com %s bytes",
+            len(image_bytes),
+        )
         try:
             if not image_bytes or len(image_bytes) == 0:
                 raise ValueError("image_bytes vazio")
-            
-            log.debug(f"[WuWaKuroBannerCard] Criando QPixmap...")
+
+            log.debug("[WuWaKuroBannerCard] Criando QPixmap...")
             pixmap = QPixmap()
             loaded = pixmap.loadFromData(QByteArray(image_bytes))
-            log.debug(f"[WuWaKuroBannerCard] Pixmap.loadFromData retornou: {loaded}")
-            log.debug(f"[WuWaKuroBannerCard] Pixmap isNull: {pixmap.isNull()}, size: {pixmap.size()}")
-            
+            log.debug(
+                "[WuWaKuroBannerCard] Pixmap.loadFromData retornou: %s", loaded
+            )
+            log.debug(
+                "[WuWaKuroBannerCard] Pixmap isNull: %s, size: %s",
+                pixmap.isNull(),
+                pixmap.size(),
+            )
+
             if not pixmap.isNull():
                 # Redimensiona preservando TODO o conteúdo (sem cortar)
                 # Container: 960x440
-                # Estratégia: SEMPRE escala por ALTURA (440px) - nunca corta topo/bottom
+                # Estratégia: SEMPRE escala por ALTURA (440px) - nunca
+                # corta topo/bottom
                 # Se largura > 960, faz crop APENAS nas laterais
-                log.debug(f"[WuWaKuroBannerCard] Escalando pixmap de {pixmap.size()} para altura 440px...")
-                
+                log.debug(
+                    "[WuWaKuroBannerCard] Escalando pixmap de %s para altura"
+                    " 440px...",
+                    pixmap.size(),
+                )
+
                 # Escala por altura mantendo proporção (preserva tudo vertical)
                 scaled_pixmap = pixmap.scaledToHeight(
-                    440, 
-                    Qt.SmoothTransformation
+                    440, Qt.SmoothTransformation
                 )
-                log.debug(f"[WuWaKuroBannerCard] Após scaledToHeight(440): {scaled_pixmap.size()}")
-                
+                log.debug(
+                    "[WuWaKuroBannerCard] Após scaledToHeight(440): %s",
+                    scaled_pixmap.size(),
+                )
+
                 # Se largura > 960, faz crop APENAS nas laterais (centro)
                 if scaled_pixmap.width() > 960:
                     crop_x = (scaled_pixmap.width() - 960) // 2
-                    log.debug(f"[WuWaKuroBannerCard] Cortando {crop_x}px de cada lado (esquerda/direita)...")
+                    log.debug(
+                        "[WuWaKuroBannerCard] Cortando %spx de cada lado"
+                        " (esquerda/direita)...",
+                        crop_x,
+                    )
                     scaled_pixmap = scaled_pixmap.copy(crop_x, 0, 960, 440)
-                    log.debug(f"[WuWaKuroBannerCard] Tamanho após crop: {scaled_pixmap.size()}")
+                    log.debug(
+                        "[WuWaKuroBannerCard] Tamanho após crop: %s",
+                        scaled_pixmap.size(),
+                    )
                 else:
                     # Largura < 960: mantém aspecto correto, sem esticar
-                    log.debug(f"[WuWaKuroBannerCard] Imagem cabe perfeitamente (largura {scaled_pixmap.width()} < 960)")
+                    log.debug(
+                        "[WuWaKuroBannerCard] Imagem cabe perfeitamente"
+                        " (largura %s < 960)",
+                        scaled_pixmap.width(),
+                    )
 
                 self.banner_width = scaled_pixmap.width()
                 self.setFixedWidth(self.banner_width)
@@ -350,49 +442,67 @@ class WuWaKuroBannerCard(QFrame):
                 self._position_countdown()
                 self._apply_hologram_mask()
                 self._update_hologram()
-                
-                # Aplica cantos arredondados com sombra suave usando QPainterPath
-                log.debug(f"[WuWaKuroBannerCard] Aplicando cantos arredondados estilo parentese )...")
-                rounded_pixmap = _create_rounded_pixmap(scaled_pixmap, radius=16)
-                log.debug(f"[WuWaKuroBannerCard] Pixmap pronto para exibição (960x440 com border-radius)...")
+
+                # Aplica cantos arredondados com sombra suave usando
+                # QPainterPath
+                log.debug(
+                    "[WuWaKuroBannerCard] Aplicando cantos arredondados"
+                    " estilo parentese )..."
+                )
+                rounded_pixmap = _create_rounded_pixmap(
+                    scaled_pixmap, radius=16
+                )
+                log.debug(
+                    "[WuWaKuroBannerCard] Pixmap pronto para exibição"
+                    " (960x440 com border-radius)..."
+                )
                 self.img_label.setPixmap(rounded_pixmap)
-                log.debug(f"[WuWaKuroBannerCard] Pixmap setado no label...")
+                log.debug("[WuWaKuroBannerCard] Pixmap setado no label...")
                 if self.img_label.pixmap():
-                    log.debug(f"[WuWaKuroBannerCard] Label pixmap size: {self.img_label.pixmap().size()}")
+                    log.debug(
+                        "[WuWaKuroBannerCard] Label pixmap size: %s",
+                        self.img_label.pixmap().size(),
+                    )
                 else:
-                    log.debug(f"[WuWaKuroBannerCard] [ERROR] Label pixmap eh None!")
-                log.debug(f"[WuWaKuroBannerCard] [OK] Imagem carregada com sucesso (SEM RECORTES)!")
+                    log.debug(
+                        "[WuWaKuroBannerCard] [ERROR] Label pixmap eh None!"
+                    )
+                log.debug(
+                    "[WuWaKuroBannerCard] [OK] Imagem carregada com sucesso"
+                    " (SEM RECORTES)!"
+                )
                 return
-        except Exception as e:
-            log.debug(f"[WuWaKuroBannerCard] [ERROR] Falha ao carregar arte do banner: {e}")
-            import traceback
+        except (OSError, ValueError, RuntimeError, TypeError) as error:
+            log.debug(
+                "[WuWaKuroBannerCard] [ERROR] Falha ao carregar arte do"
+                " banner: %s",
+                error,
+            )
             traceback.print_exc()
-            
+
         self.img_label.setText(f"[{fallback_name}] - Arte Indisponível")
         self.img_label.setAlignment(Qt.AlignCenter)
-        self.img_label.setStyleSheet("color: #d4af37; font-size: 15px; font-weight: bold; background-color: #1a1829; border-radius: 14px;")
+        self.img_label.setStyleSheet(
+            "color: #d4af37; font-size: 15px; font-weight: bold;"
+            " background-color: #1a1829; border-radius: 14px;"
+        )
 
     def _create_hologram_effect(self) -> None:
         self._update_hologram()
 
     def _apply_hologram_mask(self) -> None:
-        mask = QPixmap(self.banner_width, 440)
-        mask.fill(Qt.GlobalColor.transparent)
+        mask = transparent_pixmap(QSize(self.banner_width, 440))
         painter = QPainter(mask)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         path = _banner_clip_path(self.banner_width, 440)
         painter.fillPath(path, Qt.GlobalColor.white)
         painter.end()
-        self.hologram_overlay.setMask(
-            mask.createMaskFromColor(
-                QColor(Qt.GlobalColor.transparent),
-                Qt.MaskMode.MaskInColor,
-            )
-        )
+        apply_alpha_mask(self.hologram_overlay, mask)
 
     def _update_hologram(self) -> None:
-        overlay = QPixmap(self.banner_width, 440)
-        overlay.fill(Qt.GlobalColor.transparent)
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
+        overlay = transparent_pixmap(QSize(self.banner_width, 440))
 
         painter = QPainter(overlay)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -417,7 +527,9 @@ class WuWaKuroBannerCard(QFrame):
         highlight.setColorAt(0.56, QColor(255, 255, 255, 0))
         painter.fillRect(0, 0, self.banner_width, 440, highlight)
 
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Screen)
+        painter.setCompositionMode(
+            QPainter.CompositionMode.CompositionMode_Screen
+        )
 
         border_gradient = QLinearGradient(0, 0, self.banner_width, 440)
         border_gradient.setColorAt(0.00, QColor(70, 235, 255, 135))
@@ -436,29 +548,53 @@ class WuWaKuroBannerCard(QFrame):
         painter.drawPath(inner_path)
 
         particle_positions = (
-            (0.08, 0.08, 3), (0.21, 0.94, 2), (0.36, 0.06, 2),
-            (0.51, 0.91, 3), (0.67, 0.07, 2), (0.82, 0.95, 2),
-            (0.94, 0.28, 3), (0.06, 0.67, 2), (0.29, 0.18, 2),
+            (0.08, 0.08, 3),
+            (0.21, 0.94, 2),
+            (0.36, 0.06, 2),
+            (0.51, 0.91, 3),
+            (0.67, 0.07, 2),
+            (0.82, 0.95, 2),
+            (0.94, 0.28, 3),
+            (0.06, 0.67, 2),
+            (0.29, 0.18, 2),
             (0.74, 0.81, 2),
         )
         particle_colors = (
-            QColor(75, 235, 255, 180), QColor(255, 95, 190, 165),
-            QColor(255, 220, 100, 175), QColor(170, 125, 255, 160),
+            QColor(75, 235, 255, 180),
+            QColor(255, 95, 190, 165),
+            QColor(255, 220, 100, 175),
+            QColor(170, 125, 255, 160),
         )
         for index, (x_ratio, y_ratio, radius) in enumerate(particle_positions):
             drift = math.sin(self.hologram_phase * math.tau + index) * 4.0
             x = x_ratio * self.banner_width + drift
-            y = y_ratio * 440 + math.cos(self.hologram_phase * math.tau + index) * 3.0
+            y = (
+                y_ratio * 440
+                + math.cos(self.hologram_phase * math.tau + index) * 3.0
+            )
             glow = QRadialGradient(x, y, radius * 4.5)
             color = particle_colors[index % len(particle_colors)]
             glow.setColorAt(0.0, color)
-            glow.setColorAt(0.35, QColor(color.red(), color.green(), color.blue(), 70))
+            glow.setColorAt(
+                0.35, QColor(color.red(), color.green(), color.blue(), 70)
+            )
             glow.setColorAt(1.0, QColor(0, 0, 0, 0))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(glow))
-            painter.drawEllipse(QRectF(x - radius * 4.5, y - radius * 4.5, radius * 9, radius * 9))
+            painter.drawEllipse(
+                QRectF(
+                    x - radius * 4.5, y - radius * 4.5, radius * 9, radius * 9
+                )
+            )
             painter.setBrush(QBrush(QColor(255, 255, 255, 190)))
-            painter.drawEllipse(QRectF(x - radius * 0.7, y - radius * 0.7, radius * 1.4, radius * 1.4))
+            painter.drawEllipse(
+                QRectF(
+                    x - radius * 0.7,
+                    y - radius * 0.7,
+                    radius * 1.4,
+                    radius * 1.4,
+                )
+            )
 
         painter.end()
 
@@ -470,17 +606,20 @@ class WuWaKuroBannerCard(QFrame):
         now = datetime.now(timezone.utc)
         remaining = self.end_date - now
         total_seconds = int(remaining.total_seconds())
-        
+
         if total_seconds <= 0:
             self.countdown_label.setText("🔴 Convene Encerrado")
-            self.countdown_label.setStyleSheet("color: #ff4d4d; font-family: 'Segoe UI'; font-size: 14px; font-weight: bold; background: transparent;")
+            self.countdown_label.setStyleSheet(
+                "color: #ff4d4d; font-family: 'Segoe UI'; font-size: 14px;"
+                " font-weight: bold; background: transparent;"
+            )
             self.timer.stop()
             return
-            
+
         days, remainder = divmod(total_seconds, 86400)
         hours, remainder = divmod(remainder, 3600)
         minutes, seconds = divmod(remainder, 60)
-        
+
         if days > 0:
             countdown_text = f"{days} dias"
         else:
@@ -506,7 +645,10 @@ class WuWaKuroBannerCard(QFrame):
         if active:
             if not self.hologram_timer.isActive():
                 self.hologram_timer.start(HOLOGRAM_INTERVAL_MS)
-            if self.end_date > datetime.now(timezone.utc) and not self.timer.isActive():
+            if (
+                self.end_date > datetime.now(timezone.utc)
+                and not self.timer.isActive()
+            ):
                 self.timer.start(1000)
             return
         self.hologram_timer.stop()

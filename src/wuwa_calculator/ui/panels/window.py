@@ -1,22 +1,19 @@
+"""Main window, lazy-loaded tabs, and character navigation."""
+
 from __future__ import annotations
 
 import logging
-import re
 import sys
-import unicodedata
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QSettings, Qt, QUrl
 from PySide6.QtGui import QPixmap, QResizeEvent
-# PySide6 exposes these widget classes dynamically; pylint cannot resolve them
-# from the package metadata and incorrectly reports E0611 for valid imports.
-# pylint: disable=no-name-in-module
 from PySide6.QtWidgets import (
-    QApplication,
+    QFrame,
     QGraphicsBlurEffect,
     QHBoxLayout,
     QLabel,
-    QFrame,
     QLineEdit,
     QMainWindow,
     QMessageBox,
@@ -25,47 +22,59 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-# pylint: enable=no-name-in-module
 
 from wuwa_calculator.data.characters_elements import CHARACTER_ELEMENTS
-from wuwa_calculator.services.characters.identity import resolve_character_id
-from wuwa_calculator.ui.components.components import Card
-from wuwa_calculator.ui.dialogs.close_dialog import TETHYS_CLOSE_ICON_LOCAL, TETHYS_CLOSE_ICON_PATH, TETHYS_CLOSE_ICON_URL, TethysCloseDialog
-from wuwa_calculator.ui.tabs.placeholder_tab import PlaceholderTab
-from wuwa_calculator.ui.components.components import TitleLabel
-from wuwa_calculator.ui.components.character_sidebar_button import CharacterSidebarButton
-from wuwa_calculator.ui.styles.styles import (
-    accent_preset,
-    application_qss,
-    refresh_glows,
-    wallpaper_palette,
+from wuwa_calculator.services.characters.identity import (
+    normalize_character_id,
+    resolve_character_id,
 )
+from wuwa_calculator.ui.components.character_sidebar_button import (
+    CharacterSidebarButton,
+)
+from wuwa_calculator.ui.components.components import Card, TitleLabel
+from wuwa_calculator.ui.dialogs.close_dialog import (
+    TETHYS_CLOSE_ICON_LOCAL,
+    TETHYS_CLOSE_ICON_PATH,
+    TETHYS_CLOSE_ICON_URL,
+    TethysCloseDialog,
+)
+from wuwa_calculator.ui.styles.element_nav import (
+    WINDOW_NAV_COLORS as ELEMENT_NAV_COLORS,
+)
+from wuwa_calculator.ui.styles.element_nav import (
+    element_icon,
+)
+from wuwa_calculator.ui.tabs.placeholder_tab import PlaceholderTab
+from wuwa_calculator.ui.windows.appearance import apply_appearance
+
+if TYPE_CHECKING:
+    from wuwa_calculator.ui.tabs.resonator_tab import ResonatorTab
 
 
 def _resonator_tab_cls():
     """Importa a aba de personagem sob demanda (módulo pesado)."""
+    # Carrega telas e diálogos sob demanda.
+    # pylint: disable-next=import-outside-toplevel
     from wuwa_calculator.ui.tabs.resonator_tab import ResonatorTab
+
     return ResonatorTab
 
 
 def _is_resonator_tab(widget: object) -> bool:
-    """True para ResonatorTab sem importar o módulo se ele ainda não foi carregado."""
+    """True para ResonatorTab sem importar o módulo se ele ainda não foi
+    carregado."""
     module = sys.modules.get("wuwa_calculator.ui.tabs.resonator_tab")
     return module is not None and isinstance(widget, module.ResonatorTab)
 
 
-ELEMENT_NAV_COLORS = {
-    "Aero": ("#163d4a", "#4cc9f0", "#d9f7ff", "#1f5668"),
-    "Glacio": ("#163b52", "#72d2ff", "#e1f7ff", "#205d7d"),
-    "Electro": ("#33204f", "#b084ff", "#f1e6ff", "#4d2d73"),
-    "Fusion": ("#4b251d", "#ff8a65", "#fff0e8", "#713628"),
-    "Havoc": ("#401d35", "#e56bba", "#ffe8f7", "#652d54"),
-    "Spectro": ("#443b18", "#e8d66b", "#fffbe0", "#665a22"),
-}
-
-
 class WuwaQtWindow(QMainWindow):
+    """Application shell containing navigation and lazy-loaded tabs."""
+
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
     def __init__(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         super().__init__()
         self.preferences = QSettings("Tethys", "Tethys")
         self.setWindowTitle("Tethys System")
@@ -79,7 +88,8 @@ class WuwaQtWindow(QMainWindow):
         self.background_label = QLabel(self)
         self.background_label.setObjectName("appBackground")
         self.background_label.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
         acrylic_blur = QGraphicsBlurEffect(self.background_label)
         acrylic_blur.setBlurRadius(18)
         self.background_label.setGraphicsEffect(acrylic_blur)
@@ -100,7 +110,9 @@ class WuwaQtWindow(QMainWindow):
         header_layout.addStretch(1)
 
         self.character_id_entry = QLineEdit()
-        self.character_id_entry.setPlaceholderText("Digite o nome do(a) personagem...")
+        self.character_id_entry.setPlaceholderText(
+            "Digite o nome do(a) personagem..."
+        )
         self.character_id_entry.setFixedWidth(210)
 
         self.character_load_button = QPushButton("Buscar")
@@ -122,21 +134,33 @@ class WuwaQtWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.setObjectName("mainTabs")
         tabs.tabBar().hide()
-        
+
         def build_home() -> QWidget:
+            # Carrega telas e diálogos sob demanda.
+            # pylint: disable-next=import-outside-toplevel
             from wuwa_calculator.ui.tabs.home_tab import HomeTab
+
             return HomeTab()
 
         def build_teams() -> QWidget:
+            # Carrega telas e diálogos sob demanda.
+            # pylint: disable-next=import-outside-toplevel
             from wuwa_calculator.ui.tabs.teams_tab import TeamsTab
+
             return TeamsTab()
 
         def build_history() -> QWidget:
+            # Carrega telas e diálogos sob demanda.
+            # pylint: disable-next=import-outside-toplevel
             from wuwa_calculator.ui.tabs.history_tab import HistoryTab
+
             return HistoryTab()
 
         def build_multimedia() -> QWidget:
+            # Carrega telas e diálogos sob demanda.
+            # pylint: disable-next=import-outside-toplevel
             from wuwa_calculator.ui.tabs.multimedia_tab import MultimediaTab
+
             return MultimediaTab()
 
         self._tab_factories = (
@@ -147,9 +171,16 @@ class WuwaQtWindow(QMainWindow):
             lambda: PlaceholderTab(
                 "Fontes de dados",
                 "Tela preparada para exibir fontes, "
-                "cache e estado das integrações."),
+                "cache e estado das integrações.",
+            ),
         )
-        self._tab_titles = ("Home", "Teams", "Histórico", "Mapeamento de Frequências", "Fontes de dados")
+        self._tab_titles = (
+            "Home",
+            "Teams",
+            "Histórico",
+            "Mapeamento de Frequências",
+            "Fontes de dados",
+        )
         self._tab_widgets: dict[int, QWidget] = {}
         self._active_main_index: int | None = None
         self.tabs = tabs
@@ -173,10 +204,9 @@ class WuwaQtWindow(QMainWindow):
         self.sidebar_layout = QVBoxLayout(sidebar)
         self.sidebar_layout.setContentsMargins(14, 18, 14, 18)
         self.sidebar_layout.setSpacing(8)
-        for index, label in enumerate(("⌂   Home",
-                                       "♣   Teams",
-                                       "◷   Histórico",
-                                       "⌁   Frequências")):
+        for index, label in enumerate(
+            ("⌂   Home", "♣   Teams", "◷   Histórico", "⌁   Frequências")
+        ):
             self._add_sidebar_button(self.sidebar_layout, label, index)
         self.sidebar_layout.addSpacing(10)
         self.character_sidebar_layout = QVBoxLayout()
@@ -186,10 +216,12 @@ class WuwaQtWindow(QMainWindow):
         self.sidebar_layout.addStretch(1)
 
         settings_button = self._add_sidebar_button(
-            self.sidebar_layout, "⚙   Configurações", None)
+            self.sidebar_layout, "⚙   Configurações", None
+        )
         settings_button.clicked.connect(self.open_settings)
         about_button = self._add_sidebar_button(
-            self.sidebar_layout, "ⓘ   Sobre", None)
+            self.sidebar_layout, "ⓘ   Sobre", None
+        )
 
         about_button.clicked.connect(self.open_about)
         workspace.addWidget(sidebar)
@@ -202,36 +234,25 @@ class WuwaQtWindow(QMainWindow):
             self.preferences.value("background", True, type=bool),
             self.preferences.value("wallpaper", "", type=str),
         )
-        self.character_load_button.clicked.connect(
-            self.open_character_tab)
-        self.character_id_entry.returnPressed.connect(
-            self.open_character_tab)
+        self.character_load_button.clicked.connect(self.open_character_tab)
+        self.character_id_entry.returnPressed.connect(self.open_character_tab)
         self.import_button.clicked.connect(self.open_import_dialog)
         self.apply_preferences()
 
     def apply_preferences(self) -> None:
+        """Apply saved appearance settings to the window and its views."""
         self.preferences.sync()
         background = self.preferences.value("background", True, type=bool)
         wallpaper = self.preferences.value("wallpaper", "", type=str)
-        interface_opacity = self.preferences.value("interface_opacity", 85, type=int)
-        accent_theme = self.preferences.value("accent_theme", "Ciano Tethys", type=str)
-        app = QApplication.instance()
-
-        if app is not None:
-            app.setStyleSheet(application_qss(
-                show_background=background,
-                wallpaper=wallpaper,
-                interface_opacity=interface_opacity,
-                accent_theme=accent_theme,
-            ))
-        for widget in self.findChildren(QWidget):
-            apply_palette = getattr(widget, "apply_wallpaper_palette", None)
-            if callable(apply_palette):
-                apply_palette(
-                    *wallpaper_palette(wallpaper if background else ""),
-                    accent_preset(accent_theme),
-                )
-        refresh_glows(self)
+        interface_opacity = self.preferences.value(
+            "interface_opacity", 85, type=int
+        )
+        accent_theme = self.preferences.value(
+            "accent_theme", "Ciano Tethys", type=str
+        )
+        apply_appearance(
+            self, (background, wallpaper, interface_opacity, accent_theme)
+        )
         self._update_background(background, wallpaper)
 
     def _update_background(self, enabled: bool, wallpaper: str) -> None:
@@ -245,11 +266,12 @@ class WuwaQtWindow(QMainWindow):
             return
 
         source = (
-            QUrl.fromUserInput(wallpaper).toLocalFile()
-            if wallpaper else "")
+            QUrl.fromUserInput(wallpaper).toLocalFile() if wallpaper else ""
+        )
         project_root = Path(__file__).resolve().parent.parent
         default_background = (
-            project_root / "Assets" / "app_background_reference.png")
+            project_root / "Assets" / "app_background_reference.png"
+        )
         pixmap = QPixmap(source or str(default_background))
 
         if pixmap.isNull():
@@ -265,7 +287,8 @@ class WuwaQtWindow(QMainWindow):
         top = max(0, (scaled.height() - self.height()) // 2)
         self.background_label.setGeometry(self.rect())
         self.background_label.setPixmap(
-            scaled.copy(left, top, self.width(), self.height()))
+            scaled.copy(left, top, self.width(), self.height())
+        )
         self.background_label.lower()
         self._background_cache_key = cache_key
 
@@ -309,26 +332,46 @@ class WuwaQtWindow(QMainWindow):
                 element, ELEMENT_NAV_COLORS["Spectro"]
             )
             button.setStyleSheet(
-                f"QPushButton {{ background: {background}; color: {text}; "
-                f"border: 1px solid {border}; border-radius: 7px; padding: 10px; }}"
-                f"QPushButton:hover {{ background: {hover}; border: 1px solid {border}; }}"
+                f"QPushButton {{ background: {background}; color: {text};"
+                f" border: 1px solid {border}; border-radius: 7px; padding:"
+                f" 10px; }}QPushButton:hover {{ background: {hover}; border:"
+                f" 1px solid {border}; }}"
             )
         if tab_index is not None:
             button.clicked.connect(
-                lambda: self._select_main_tab(tab_index, label))
+                lambda: self._select_main_tab(tab_index, label)
+            )
             self.sidebar_buttons[label] = button
         layout.addWidget(button)
         return button
 
+    def clear_characters(self) -> None:
+        """Close loaded characters and reset their navigation bookkeeping."""
+        for character_id in tuple(self.character_tabs):
+            self._close_character_tab(character_id)
+        self.tabs.setCurrentIndex(0)
+        self._set_sidebar_active("Home")
+
     def open_settings(self) -> None:
+        # Carrega telas e diálogos sob demanda.
+        """Open the application preferences dialog."""
+        # Load this optional/heavy dependency only when the action runs.
+        # pylint: disable-next=import-outside-toplevel
         from wuwa_calculator.ui.dialogs.settings_dialog import SettingsDialog
+
         SettingsDialog(self).exec()
 
     def open_about(self) -> None:
+        # Carrega telas e diálogos sob demanda.
+        """Open application information and documentation links."""
+        # Load this optional/heavy dependency only when the action runs.
+        # pylint: disable-next=import-outside-toplevel
         from wuwa_calculator.ui.dialogs.about_dialog import AboutDialog
+
         AboutDialog(self).exec()
 
     def open_import_dialog(self) -> None:
+        """Open image import for the currently selected character."""
         character_tab = self.tabs.currentWidget()
         if not _is_resonator_tab(character_tab):
             QMessageBox.information(
@@ -337,9 +380,12 @@ class WuwaQtWindow(QMainWindow):
                 "Carregue uma ID de personagem antes de importar a imagem.",
             )
             return
+        # Carrega telas e diálogos sob demanda.
+        # pylint: disable-next=import-outside-toplevel
         from wuwa_calculator.ui.dialogs.import_stats_dialog import ImportDialog
+
         ImportDialog(self, character_tab).exec()
-    
+
     def _select_main_tab(self, index: int, label: str) -> None:
         self.tabs.setCurrentIndex(index)
         self._set_sidebar_active(label)
@@ -355,7 +401,9 @@ class WuwaQtWindow(QMainWindow):
         except ImportError as error:
             # Dependência opcional ausente (ex.: pyqtgraph): mostra o motivo na
             # própria aba em vez de repetir o traceback a cada clique.
-            logging.getLogger(__name__).error("aba %s indisponível: %s", self._tab_titles[index], error)
+            logging.getLogger(__name__).error(
+                "aba %s indisponível: %s", self._tab_titles[index], error
+            )
             widget = PlaceholderTab(
                 self._tab_titles[index],
                 f"Esta aba não pôde ser carregada:\n{error}\n\n"
@@ -405,8 +453,9 @@ class WuwaQtWindow(QMainWindow):
 
     def _set_sidebar_active(self, active_label: str) -> None:
         for label, button in self.sidebar_buttons.items():
-            button.setObjectName("navActive"
-                                 if label == active_label else "nav")
+            button.setObjectName(
+                "navActive" if label == active_label else "nav"
+            )
             button.style().unpolish(button)
             button.style().polish(button)
             button.update()
@@ -429,17 +478,19 @@ class WuwaQtWindow(QMainWindow):
                 element, ELEMENT_NAV_COLORS["Spectro"]
             )
             button.setStyleSheet(
-                f"QPushButton {{ background: {background}; color: {text}; "
-                f"border: 1px solid {border}; border-radius: 7px; padding: 10px; "
-                f"padding-right: 32px; }}"
-                f"QPushButton:hover {{ background: {hover}; border: 1px solid {border}; }}"
+                f"QPushButton {{ background: {background}; color: {text};"
+                f" border: 1px solid {border}; border-radius: 7px; padding:"
+                " 10px; padding-right: 32px; }QPushButton:hover {"
+                f" background: {hover}; border: 1px solid {border}; }}"
             )
         row_layout.addWidget(button)
         self.sidebar_buttons[label] = button
         button.clicked.connect(
-            lambda: self._select_character_tab(character_id, label))
+            lambda: self._select_character_tab(character_id, label)
+        )
         button.close_requested.connect(
-            lambda: self._close_character_tab(character_id))
+            lambda: self._close_character_tab(character_id)
+        )
         self.character_sidebar_rows[character_id] = row
         self.character_sidebar_layout.addWidget(row)
 
@@ -466,10 +517,13 @@ class WuwaQtWindow(QMainWindow):
         if history_index == 0:
             previous_character_id = (
                 self.character_open_order[1]
-                if len(self.character_open_order) > 1 else None
+                if len(self.character_open_order) > 1
+                else None
             )
         else:
-            previous_character_id = self.character_open_order[history_index - 1]
+            previous_character_id = self.character_open_order[
+                history_index - 1
+            ]
         self.character_open_order.remove(character_id)
         tab_index = self.tabs.indexOf(character_tab)
         if tab_index >= 0:
@@ -482,8 +536,12 @@ class WuwaQtWindow(QMainWindow):
             previous_tab = self.character_tabs.get(previous_character_id)
             if previous_tab is not None:
                 self.tabs.setCurrentWidget(previous_tab)
+                previous_element_icon = self._element_icon(
+                    CHARACTER_ELEMENTS.get(previous_character_id)
+                )
                 previous_label = (
-                    f"{self._element_icon(CHARACTER_ELEMENTS.get(previous_character_id))}   "
+                    f"{previous_element_icon}"
+                    "   "
                     f"{previous_character_id.title()}"
                 )
                 self._set_sidebar_active(previous_label)
@@ -506,23 +564,14 @@ class WuwaQtWindow(QMainWindow):
 
     @staticmethod
     def _normalize_character_id(value: str) -> str:
-        folded = "".join(
-            char for char in unicodedata.normalize("NFKD", value.casefold())
-            if not unicodedata.combining(char))
-        return re.sub(r"[^a-z0-9]+", "", folded)
+        return normalize_character_id(value)
 
     @staticmethod
     def _element_icon(element: str | None) -> str:
-        return {
-            "Aero": "◈",
-            "Glacio": "❄",
-            "Electro": "✦",
-            "Fusion": "♢",
-            "Havoc": "◉",
-            "Spectro": "✧",
-        }.get(str(element), "◆")
+        return element_icon(element)
 
     def open_character_tab(self) -> None:
+        """Resolve the search text and select or open its character tab."""
         target = self._normalize_character_id(self.character_id_entry.text())
         character_id = resolve_character_id(target)
         if character_id is None:
@@ -535,9 +584,9 @@ class WuwaQtWindow(QMainWindow):
             self.character_tabs[character_id] = character_tab
             self.character_open_order.append(character_id)
             sources_index = self.tabs.count() - 1
-            self.tabs.insertTab(sources_index,
-                                character_tab,
-                                character_id.title())
+            self.tabs.insertTab(
+                sources_index, character_tab, character_id.title()
+            )
             label = character_id.title()
             element = CHARACTER_ELEMENTS.get(character_id)
             self.tabs.setTabText(
@@ -552,5 +601,7 @@ class WuwaQtWindow(QMainWindow):
 
         self.tabs.setCurrentWidget(character_tab)
         self._set_sidebar_active(
-            f"{self._element_icon(CHARACTER_ELEMENTS.get(character_id))}   {character_id.title()}")
+            f"{self._element_icon(CHARACTER_ELEMENTS.get(character_id))}  "
+            f" {character_id.title()}"
+        )
         self.character_status.clear()

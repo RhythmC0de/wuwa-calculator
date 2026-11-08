@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QWidget,
+)
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel
 
 
 class HeaderBar(Card):
+    """Search for characters and start stat-image imports."""
+
     search_submitted = Signal()
     import_clicked = Signal()
 
@@ -44,7 +52,9 @@ class HeaderBar(Card):
         layout.addWidget(self.character_status)
 
     def query(self) -> str:
+        """Return the character search text entered in the header."""
         return self.character_id_entry.text()
 
     def set_status(self, text: str) -> None:
+        """Display the current status message."""
         self.character_status.setText(text)

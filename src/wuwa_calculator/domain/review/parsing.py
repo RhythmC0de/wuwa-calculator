@@ -22,6 +22,7 @@ class ParseError(ValueError):
 
 
 def parse_parts(text: str) -> tuple[HitPart, ...]:
+    """Parse corrected damage values and their repetition counts."""
     text = (text or "").strip()
     if not text:
         raise ParseError("Digite pelo menos um valor.")
@@ -48,7 +49,9 @@ def parse_parts(text: str) -> tuple[HitPart, ...]:
         if not 0 < value <= MAX_HIT_VALUE:
             raise ParseError(f"Valor fora do intervalo permitido: {digits}")
         if not 0 < copies <= MAX_COPIES:
-            raise ParseError(f"Quantidade de cópias deve ficar entre 1 e {MAX_COPIES}.")
+            raise ParseError(
+                f"Quantidade de cópias deve ficar entre 1 e {MAX_COPIES}."
+            )
 
         parts.append(HitPart(value, copies))
         position = token.end()

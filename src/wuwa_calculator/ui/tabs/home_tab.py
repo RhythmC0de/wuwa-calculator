@@ -4,15 +4,27 @@ from __future__ import annotations
 
 import logging
 import math
-import os
-import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
-
-from PySide6.QtCore import QByteArray, QObject, QEvent, QThread, QTimer, QRectF, Qt, Signal
+from PySide6.QtCore import (
+    QByteArray,
+    QEvent,
+    QObject,
+    QRectF,
+    QSize,
+    Qt,
+    QThread,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import (
-    QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap,
+    QBrush,
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
     QRadialGradient,
 )
 from PySide6.QtWidgets import (
@@ -26,32 +38,41 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from wuwa_calculator.ui.components.components import Card, TitleLabel, WuWaKuroBannerCard
 from wuwa_calculator.infrastructure.banner_service import fetch_current_banner
+from wuwa_calculator.storage.banner_cache import (
+    load_cached_banner,
+    save_cached_banner,
+)
+from wuwa_calculator.ui.components.components import (
+    Card,
+    TitleLabel,
+    WuWaKuroBannerCard,
+)
 from wuwa_calculator.ui.panels.pity_tracker import PityTrackerWidget
-from wuwa_calculator.ui.styles.styles import apply_glow
-from wuwa_calculator.storage.banner_cache import load_cached_banner, save_cached_banner
-
+from wuwa_calculator.ui.rendering import (
+    apply_alpha_mask,
+    draw_centered,
+    smooth_scaled,
+    transparent_pixmap,
+)
 
 log = logging.getLogger(__name__)
 HOLOGRAM_INTERVAL_MS = 66
 
 
-def _rounded_banner_pixmap(source: QPixmap, width: int, height: int, radius: int = 12) -> QPixmap:
-    scaled = source.scaled(
-        width, height, Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
+def _rounded_banner_pixmap(
+    source: QPixmap, width: int, height: int, radius: int = 12
+) -> QPixmap:
+    scaled = smooth_scaled(
+        source, width, height, Qt.AspectRatioMode.KeepAspectRatio
     )
-    canvas = QPixmap(width, height)
-    canvas.fill(Qt.GlobalColor.transparent)
+    canvas = transparent_pixmap(QSize(width, height))
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     path = QPainterPath()
     path.addRoundedRect(0, 0, width, height, radius, radius)
     painter.setClipPath(path)
-    x = (width - scaled.width()) // 2
-    y = (height - scaled.height()) // 2
-    painter.drawPixmap(x, y, scaled)
+    draw_centered(painter, scaled, width, height)
     painter.end()
     return canvas
 
@@ -63,9 +84,8 @@ def _full_banner_pixmap(
     radius: int = 16,
     vertical_offset: int = 0,
 ) -> QPixmap:
-    scaled = source.scaled(
-        width, height, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-        Qt.TransformationMode.SmoothTransformation,
+    scaled = smooth_scaled(
+        source, width, height, Qt.AspectRatioMode.KeepAspectRatioByExpanding
     )
     canvas = QPixmap(width, height)
     canvas.fill(QColor("#0C101E"))
@@ -88,8 +108,7 @@ def _full_banner_pixmap(
 
 
 def _apply_rounded_image_mask(widget: QLabel, radius: int = 16) -> None:
-    mask = QPixmap(widget.size())
-    mask.fill(Qt.GlobalColor.transparent)
+    mask = transparent_pixmap(widget.size())
     painter = QPainter(mask)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     path = QPainterPath()
@@ -100,37 +119,62 @@ def _apply_rounded_image_mask(widget: QLabel, radius: int = 16) -> None:
     )
     painter.fillPath(path, QColor(Qt.GlobalColor.white))
     painter.end()
-    widget.setMask(mask.createMaskFromColor(
-        QColor(Qt.GlobalColor.transparent),
-        Qt.MaskMode.MaskInColor,
-    ))
+    apply_alpha_mask(widget, mask)
 
 
 class BannerWorker(QObject):
+    """Download the current banner in a background worker."""
+
     finished = Signal(object)
 
     def run(self) -> None:
+        """Execute the worker and emit its result or failure signal."""
         log.debug("[BannerWorker] Iniciando trabalho...")
         result = fetch_current_banner()
         if isinstance(result, dict):
             save_cached_banner(result)
-        log.debug(f"[BannerWorker] Resultado: {type(result)} - {result if not isinstance(result, dict) else 'dict com dados'}")
+        log.debug(
+            "[BannerWorker] Resultado: %s - %s",
+            type(result),
+            result if not isinstance(result, dict) else "dict com dados",
+        )
         self.finished.emit(result)
 
 
 class CatalogWorker(QObject):
+    """Download the announced banner catalog in a background worker."""
+
     finished = Signal(object)
 
     def run(self) -> None:
-        from wuwa_calculator.infrastructure.wuwa_tracker_adapter import fetch_banner_catalog
+        """Execute the worker and emit its result or failure signal."""
+        # Load this optional/heavy dependency only when the action runs.
+        # pylint: disable-next=import-outside-toplevel
+        from wuwa_calculator.infrastructure.wuwa_tracker_adapter import (
+            fetch_banner_catalog,
+        )
+
         self.finished.emit(fetch_banner_catalog())
 
 
 class UpcomingBannerCard(QFrame):
-    def __init__(self, record: dict[str, object], state: str,
-                 compact: bool = False, parent: QWidget | None = None) -> None:
+    """Render the artwork and dates of an announced banner."""
+
+    def __init__(
+        self,
+        record: dict[str, object],
+        state: str,
+        compact: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-statements
+        # Retain keyword/signal compatibility with existing callers.
+        # pylint: disable=unused-argument
         super().__init__(parent)
-        self.setObjectName("upcomingBannerPastCard" if compact else "upcomingBannerCard")
+        self.setObjectName(
+            "upcomingBannerPastCard" if compact else "upcomingBannerCard"
+        )
         self.setFixedSize(320, 128)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.setProperty("hovered", False)
@@ -158,13 +202,15 @@ class UpcomingBannerCard(QFrame):
         if isinstance(image_bytes, bytes):
             pixmap.loadFromData(QByteArray(image_bytes))
         if not pixmap.isNull():
-            image.setPixmap(_full_banner_pixmap(
-                pixmap,
-                image.width(),
-                image.height(),
-                radius=14,
-                vertical_offset=14,
-            ))
+            image.setPixmap(
+                _full_banner_pixmap(
+                    pixmap,
+                    image.width(),
+                    image.height(),
+                    radius=14,
+                    vertical_offset=14,
+                )
+            )
         else:
             image.setText("Esperando anúncio oficial")
             image.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -177,21 +223,26 @@ class UpcomingBannerCard(QFrame):
         overlay_layout.setContentsMargins(7, 3, 7, 3)
         overlay_layout.setSpacing(0)
 
-        name = QLabel(str(record.get("name", "Aguardando anúncio oficial")), overlay)
+        name = QLabel(
+            str(record.get("name", "Aguardando anúncio oficial")), overlay
+        )
         name.setObjectName("upcomingBannerName")
         overlay_layout.addWidget(name)
 
         details = QLabel(
             f"Raridade: ★{int(record.get('rarity', 5) or 5)}\n"
-            f"{record.get('date_label', 'Data: Próximo banner')}"
-        , overlay)
+            f"{record.get('date_label', 'Data: Próximo banner')}",
+            overlay,
+        )
         details.setObjectName("upcomingBannerDetails")
         overlay_layout.addWidget(details)
         image.lower()
         overlay.raise_()
         self.hologram_overlay = QLabel(self)
         self.hologram_overlay.setFixedSize(self.size())
-        self.hologram_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hologram_overlay.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
         self.hologram_overlay.setStyleSheet("background: transparent;")
         self.hologram_phase = 0.0
         self._apply_hologram_mask()
@@ -203,7 +254,9 @@ class UpcomingBannerCard(QFrame):
 
         self.hover_frame = QFrame(self)
         self.hover_frame.setGeometry(0, 0, self.width(), self.height())
-        self.hover_frame.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hover_frame.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
         self.hover_frame.setStyleSheet(
             "QFrame { background: transparent; border: 3px solid #00F5FF; "
             "border-radius: 16px; }"
@@ -214,20 +267,14 @@ class UpcomingBannerCard(QFrame):
         overlay.installEventFilter(self)
 
     def _apply_hologram_mask(self) -> None:
-        mask = QPixmap(self.size())
-        mask.fill(Qt.GlobalColor.transparent)
+        mask = transparent_pixmap(self.size())
         painter = QPainter(mask)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         path = QPainterPath()
         path.addRoundedRect(QRectF(0, 0, self.width(), self.height()), 16, 16)
         painter.fillPath(path, Qt.GlobalColor.white)
         painter.end()
-        self.hologram_overlay.setMask(
-            mask.createMaskFromColor(
-                QColor(Qt.GlobalColor.transparent),
-                Qt.MaskMode.MaskInColor,
-            )
-        )
+        apply_alpha_mask(self.hologram_overlay, mask)
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -239,9 +286,10 @@ class UpcomingBannerCard(QFrame):
         self.hologram_timer.stop()
 
     def _update_hologram(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals
         width, height = self.width(), self.height()
-        overlay = QPixmap(width, height)
-        overlay.fill(Qt.GlobalColor.transparent)
+        overlay = transparent_pixmap(QSize(width, height))
         painter = QPainter(overlay)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         path = QPainterPath()
@@ -274,12 +322,22 @@ class UpcomingBannerCard(QFrame):
         painter.drawPath(path)
 
         for index, (x_ratio, y_ratio) in enumerate(
-            ((0.10, 0.16), (0.30, 0.88), (0.52, 0.12), (0.73, 0.84), (0.91, 0.28))
+            (
+                (0.10, 0.16),
+                (0.30, 0.88),
+                (0.52, 0.12),
+                (0.73, 0.84),
+                (0.91, 0.28),
+            )
         ):
-            x = x_ratio * width + math.sin(
-                self.hologram_phase * 6.283 + index) * 2
-            y = y_ratio * height + math.cos(
-                self.hologram_phase * 6.283 + index) * 2
+            x = (
+                x_ratio * width
+                + math.sin(self.hologram_phase * 6.283 + index) * 2
+            )
+            y = (
+                y_ratio * height
+                + math.cos(self.hologram_phase * 6.283 + index) * 2
+            )
             glow = QRadialGradient(x, y, 10)
             glow.setColorAt(0.0, QColor(255, 255, 255, 180))
             glow.setColorAt(0.35, QColor(100, 220, 255, 80))
@@ -315,11 +373,15 @@ class UpcomingBannerCard(QFrame):
 
 
 class UpcomingBannersSection(QFrame):
+    """Arrange current and announced banner cards."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("upcomingBannersSection")
         self.setFixedHeight(182)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 8)
         root.setSpacing(3)
@@ -356,8 +418,17 @@ class UpcomingBannersSection(QFrame):
         root.addLayout(body, 1)
         self.set_cards([], loading=True)
 
-    def set_cards(self, records: list[dict[str, object]], loading: bool = False) -> None:
-        for layout in (self.past_layout, self.current_layout, self.future_layout):
+    def set_cards(
+        self, records: list[dict[str, object]], loading: bool = False
+    ) -> None:
+        """Replace the displayed current, past, and announced banners."""
+        # Retain keyword/signal compatibility with existing callers.
+        # pylint: disable=unused-argument
+        for layout in (
+            self.past_layout,
+            self.current_layout,
+            self.future_layout,
+        ):
             while layout.count():
                 item = layout.takeAt(0)
                 if item.widget() is not None:
@@ -369,9 +440,13 @@ class UpcomingBannersSection(QFrame):
             (self.future_layout, "future", "PRÓXIMOS CONFIRMADOS"),
         )
         for layout, kind, title in columns:
-            record = next((item for item in records if item.get("kind") == kind), None)
+            record = next(
+                (item for item in records if item.get("kind") == kind), None
+            )
             if record is not None:
-                layout.addWidget(UpcomingBannerCard(record, title, compact=True))
+                layout.addWidget(
+                    UpcomingBannerCard(record, title, compact=True)
+                )
             else:
                 placeholder = QLabel(title + "\nSem dados importados.")
                 placeholder.setObjectName("bannerTimelineEmpty")
@@ -380,7 +455,17 @@ class UpcomingBannersSection(QFrame):
 
 
 class HomeTab(QWidget):
-    def __init__(self, preloaded_banner: dict[str, object] | None = None, parent: QWidget | None = None) -> None:
+    """Show current banners and pull-history information."""
+
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
+    def __init__(
+        self,
+        preloaded_banner: dict[str, object] | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-statements
         super().__init__(parent)
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 18, 18, 18)
@@ -390,12 +475,17 @@ class HomeTab(QWidget):
         intro_layout = QVBoxLayout(intro)
         intro_layout.setContentsMargins(20, 18, 20, 18)
         intro_layout.addWidget(TitleLabel("Tethys"))
-        subtitle = QLabel("Motor de dano local para testar rotações, equipes e execução prática.")
+        subtitle = QLabel(
+            "Motor de dano local para testar rotações, equipes e execução"
+            " prática."
+        )
         subtitle.setObjectName("muted")
         intro_layout.addWidget(subtitle)
         root.addWidget(intro)
 
-        cached_banner = load_cached_banner() if preloaded_banner is None else None
+        cached_banner = (
+            load_cached_banner() if preloaded_banner is None else None
+        )
         initial_banner = preloaded_banner or cached_banner
         self.banner_data: dict[str, object] | None = initial_banner
         self.banner_thread: QThread | None = None
@@ -403,7 +493,7 @@ class HomeTab(QWidget):
         self.catalog_thread: QThread | None = None
         self.catalog_worker: CatalogWorker | None = None
         self.banner_card: WuWaKuroBannerCard | None = None
-        
+
         hero_row = QHBoxLayout()
         hero_row.setContentsMargins(0, 0, 0, 0)
         hero_row.setSpacing(12)
@@ -423,20 +513,30 @@ class HomeTab(QWidget):
         placeholder_layout.addWidget(placeholder_label)
         self.banner_container = banner_column_layout
         hero_row.addWidget(banner_column, 1)
-        active_name = str(initial_banner.get("name", "qingxiao")) if initial_banner else "qingxiao"
+        active_name = (
+            str(initial_banner.get("name", "qingxiao"))
+            if initial_banner
+            else "qingxiao"
+        )
         self.pity_tracker = PityTrackerWidget(
             active_character=active_name,
             banner_images={
-                "resonator": initial_banner.get("image_bytes", b"")
-                if initial_banner else b""
+                "resonator": (
+                    initial_banner.get("image_bytes", b"")
+                    if initial_banner
+                    else b""
+                )
             },
         )
         hero_row.addWidget(self.pity_tracker, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(hero_row)
-        
+
         # Se já tem banner pré-carregado, mostra imediatamente
         if initial_banner:
-            log.debug("[HomeTab] Banner pré-carregado recebido, criando card imediatamente...")
+            log.debug(
+                "[HomeTab] Banner pré-carregado recebido, criando card"
+                " imediatamente..."
+            )
             self._banner_loaded(initial_banner)
             QTimer.singleShot(0, self._start_banner_refresh)
         else:
@@ -454,6 +554,7 @@ class HomeTab(QWidget):
         root.addStretch(1)
 
     def set_active(self, active: bool) -> None:
+        """Start or stop background updates as this tab becomes active."""
         if self.banner_card is not None:
             self.banner_card.set_active(active)
 
@@ -472,8 +573,14 @@ class HomeTab(QWidget):
         if not isinstance(value, str) or not value.strip():
             return None
         try:
-            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-            return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+            parsed = datetime.fromisoformat(
+                value.strip().replace("Z", "+00:00")
+            )
+            return (
+                parsed.replace(tzinfo=timezone.utc)
+                if parsed.tzinfo is None
+                else parsed.astimezone(timezone.utc)
+            )
         except ValueError:
             return None
 
@@ -492,18 +599,24 @@ class HomeTab(QWidget):
                 continue
             if starts_at is not None and starts_at <= now <= ends_at:
                 continue
-            if ends_at < now and ends_at >= past_limit:
+            if past_limit <= ends_at < now:
                 record = dict(raw)
                 record["kind"] = "past"
                 record["date_label"] = f"Data: {ends_at.strftime('%d/%m/%Y')}"
                 visible.append(record)
-            elif ends_at >= now and starts_at is not None and now < starts_at <= future_limit:
+            elif (
+                ends_at >= now
+                and starts_at is not None
+                and now < starts_at <= future_limit
+            ):
                 if raw.get("speculated") or raw.get("isSpeculated"):
                     continue
                 record = dict(raw)
                 record["kind"] = "future"
                 record["name"] = str(raw.get("name", "Personagem"))
-                record["date_label"] = f"Data: {starts_at.strftime('%d/%m/%Y')}"
+                record["date_label"] = (
+                    f"Data: {starts_at.strftime('%d/%m/%Y')}"
+                )
                 visible.append(record)
 
         visible.sort(key=lambda item: str(item.get("ends_at", "")))
@@ -530,36 +643,43 @@ class HomeTab(QWidget):
         log.debug("[HomeTab] Thread de banner iniciada")
 
     def _banner_loaded(self, data: object) -> None:
-        log.debug(f"[HomeTab] _banner_loaded chamado. data type: {type(data)}")
-        
+        log.debug(
+            "[HomeTab] _banner_loaded chamado. data type: %s", type(data)
+        )
+
         if not isinstance(data, dict):
             log.debug("[HomeTab] Banner data não é dict, mantendo placeholder")
             return
-        
+
         self.banner_data = data
-        character_name = str(data.get('name', 'Banner'))
-        image_bytes = data.get('image_bytes', b'')
-        ends_at_str = str(data.get('ends_at', ''))
-        
-        log.debug(f"[HomeTab] character_name: {character_name}")
-        log.debug(f"[HomeTab] image_bytes length: {len(image_bytes) if isinstance(image_bytes, bytes) else 'NÃO É BYTES'}")
-        log.debug(f"[HomeTab] ends_at_str: {ends_at_str}")
-        
+        character_name = str(data.get("name", "Banner"))
+        image_bytes = data.get("image_bytes", b"")
+        ends_at_str = str(data.get("ends_at", ""))
+
+        log.debug("[HomeTab] character_name: %s", character_name)
+        image_size = (
+            len(image_bytes)
+            if isinstance(image_bytes, bytes)
+            else "NÃO É BYTES"
+        )
+        log.debug("[HomeTab] image_bytes length: %s", image_size)
+        log.debug("[HomeTab] ends_at_str: %s", ends_at_str)
+
         if not isinstance(image_bytes, bytes) or len(image_bytes) == 0:
             log.debug("[HomeTab] image_bytes vazio, retornando")
             return
-        
+
         try:
             ends_at = datetime.fromisoformat(ends_at_str)
-            log.debug(f"[HomeTab] ends_at parseado: {ends_at}")
+            log.debug("[HomeTab] ends_at parseado: %s", ends_at)
         except (ValueError, TypeError) as e:
-            log.debug(f"[HomeTab] Erro ao parsear data: {e}")
+            log.debug("[HomeTab] Erro ao parsear data: %s", e)
             return
 
         starts_at = self._parse_catalog_date(data.get("starts_at"))
         if starts_at is None and character_name.casefold() == "jingran":
             starts_at = datetime(2026, 9, 10, 10, tzinfo=timezone.utc)
-        
+
         # Remove o placeholder e cria o novo banner card
         log.debug("[HomeTab] Removendo placeholder...")
         if self.banner_placeholder and self.banner_placeholder.parent():
@@ -571,7 +691,7 @@ class HomeTab(QWidget):
             self.banner_container.removeWidget(self.banner_card)
             self.banner_card.deleteLater()
             self.banner_card = None
-        
+
         log.debug("[HomeTab] Criando WuWaKuroBannerCard...")
         self.banner_card = WuWaKuroBannerCard(
             character_name=character_name,

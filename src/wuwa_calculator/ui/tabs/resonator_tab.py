@@ -1,35 +1,55 @@
-"""Native PySide6 Resonator detail screen backed by local character databases."""
+"""Native PySide6 Resonator detail screen backed by local character
+databases."""
 
-# * EDITAVEL: esta tela monta banner, atributos, arma, habilidades e calculo de dano.
-# ? Os dados vêm de infrastructure/catalog.py (JSON em data/characters) no idioma
+# * EDITAVEL: esta tela monta banner, atributos, arma, habilidades e
+# calculo de dano.
+# ? Os dados vêm de infrastructure/catalog.py (JSON em data/characters)
+# no idioma
 # ? escolhido em ui/language.py. O elemento controla badge, card e glow.
 
 from __future__ import annotations
 
 import html
 import re
-import sys
-from pathlib import Path
 
-# PySide6 is provided by the application's runtime environment; keep static
-# analyzers from flagging the optional GUI dependency when it is not installed.
-from PySide6.QtCore import Qt, QUrl  # type: ignore[import-not-found]  # pylint: disable=import-error
+from PySide6.QtCore import QSignalBlocker, Qt, QUrl
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtNetwork import (
+    QNetworkAccessManager,
+    QNetworkReply,
+    QNetworkRequest,
+)
 from PySide6.QtWidgets import (
-    QComboBox, QDoubleSpinBox, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QSpinBox,
-    QTabWidget, QVBoxLayout, QWidget,
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
-
-# The application supports direct execution, so local imports depend on the
-# path adjustment above.
-# pylint: disable=wrong-import-position
-from wuwa_calculator.infrastructure.backend_adapter import calculate_character_damage
+from wuwa_calculator.infrastructure import catalog
+from wuwa_calculator.infrastructure.backend_adapter import (
+    calculate_character_damage,
+)
+from wuwa_calculator.infrastructure.catalog import Character, Skill, Weapon
+from wuwa_calculator.infrastructure.url_policy import (
+    allows_local_image,
+    allows_remote_content,
+)
 from wuwa_calculator.ui.components.components import Card, TitleLabel
+from wuwa_calculator.ui.language import SUPPORTED, language_settings
+from wuwa_calculator.ui.styles.element_nav import element_icon
 from wuwa_calculator.ui.styles.styles import apply_element_glow, apply_glow
-
 
 
 def _read_network_reply(reply: object) -> bytes:
@@ -43,7 +63,11 @@ def _read_network_reply(reply: object) -> bytes:
 class ResonatorTab(QWidget):
     """Two-column character detail view using only bundled local data."""
 
-    def __init__(self, parent: QWidget | None = None, initial_id: str | None = None) -> None:
+    # Widgets retain child controls for their signal/slot lifecycle.
+    # pylint: disable=too-many-instance-attributes
+    def __init__(
+        self, parent: QWidget | None = None, initial_id: str | None = None
+    ) -> None:
         super().__init__(parent)
         self.current_id = ""
         self.language = language_settings().code
@@ -56,6 +80,8 @@ class ResonatorTab(QWidget):
         self._render_character(self.current_id)
 
     def _build_ui(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 18, 18, 18)
         root.setSpacing(14)
@@ -82,7 +108,9 @@ class ResonatorTab(QWidget):
         self.character_image.setObjectName("bannerPortrait")
         self.character_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.character_image.setFixedSize(105, 105)
-        banner_layout.addWidget(self.character_image, 0, Qt.AlignmentFlag.AlignVCenter)
+        banner_layout.addWidget(
+            self.character_image, 0, Qt.AlignmentFlag.AlignVCenter
+        )
         banner_identity = QVBoxLayout()
         banner_identity.setSpacing(4)
         self.character_name = QLabel("--")
@@ -99,7 +127,9 @@ class ResonatorTab(QWidget):
         banner_layout.addLayout(banner_identity, 1)
         self.character_quote = QLabel("")
         self.character_quote.setObjectName("bannerQuote")
-        self.character_quote.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.character_quote.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.character_quote.setWordWrap(True)
         self.character_quote.setMinimumWidth(240)
         self.character_quote.setMaximumWidth(300)
@@ -129,7 +159,16 @@ class ResonatorTab(QWidget):
             "Crit DMG": ("✦", "Dano Crítico"),
             "Max Energy": ("ϟ", "Energia máxima"),
         }
-        for row, key in enumerate(("Base HP", "Base ATK", "Base DEF", "Crit Rate", "Crit DMG", "Max Energy")):
+        for row, key in enumerate(
+            (
+                "Base HP",
+                "Base ATK",
+                "Base DEF",
+                "Crit Rate",
+                "Crit DMG",
+                "Max Energy",
+            )
+        ):
             value = QLineEdit("--")
             value.setObjectName("resonatorStat")
             value.setFixedWidth(170)
@@ -140,13 +179,22 @@ class ResonatorTab(QWidget):
             attributes_layout.addWidget(value, row, 2)
             attributes_layout.addWidget(QLabel(hint), row, 3)
         self.element_box = QComboBox()
-        self.element_box.addItems(["Aero", "Glacio", "Electro", "Fusion", "Havoc", "Spectro"])
+        self.element_box.addItems(
+            ["Aero", "Glacio", "Electro", "Fusion", "Havoc", "Spectro"]
+        )
         attributes_layout.addWidget(QLabel("◉"), 6, 0)
         attributes_layout.addWidget(QLabel("<b>Elemento</b>"), 6, 1)
         attributes_layout.addWidget(self.element_box, 6, 2, 1, 1)
         attributes_layout.addWidget(QLabel("Elemento do personagem"), 6, 3)
         self.skill_type_box = QComboBox()
-        self.skill_type_box.addItems(["Basic Attack", "Resonance Skill", "Forte Circuit", "Resonance Liberation"])
+        self.skill_type_box.addItems(
+            [
+                "Basic Attack",
+                "Resonance Skill",
+                "Forte Circuit",
+                "Resonance Liberation",
+            ]
+        )
         attributes_layout.addWidget(QLabel("✣"), 7, 0)
         attributes_layout.addWidget(QLabel("<b>Tipo de Habilidade</b>"), 7, 1)
         attributes_layout.addWidget(self.skill_type_box, 7, 2, 1, 1)
@@ -165,7 +213,7 @@ class ResonatorTab(QWidget):
         language_row = QHBoxLayout()
         language_row.addWidget(QLabel("Idioma"))
         self.language_box = QComboBox()
-        self.language_box.addItems(["PT-BR", "EN"])
+        self.language_box.addItems(SUPPORTED)
         self.language_box.setCurrentText(self.language)
         language_row.addWidget(self.language_box)
         language_row.addStretch(1)
@@ -176,7 +224,9 @@ class ResonatorTab(QWidget):
         self.weapon_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.weapon_image.setMinimumSize(0, 0)
         self.weapon_image.setMaximumSize(320, 220)
-        self.weapon_image.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.weapon_image.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+        )
         weapon_layout.addWidget(self.weapon_image)
         weapon_layout.addWidget(self.weapon_text)
         weapon_layout.addStretch(1)
@@ -185,25 +235,39 @@ class ResonatorTab(QWidget):
         supports_layout = QFormLayout(supports)
         self.supports_entry = QLineEdit("Nenhum suporte configurado")
         self.supports_bonus_entry = QLineEdit("0%")
-        self.supports_passive_entry = QLineEdit("Nenhuma passiva de suporte configurada")
-        supports_layout.addRow(QLabel("Composição de suportes"), self.supports_entry)
-        supports_layout.addRow(QLabel("Bônus de suporte"), self.supports_bonus_entry)
-        supports_layout.addRow(QLabel("Passivas de suporte"), self.supports_passive_entry)
+        self.supports_passive_entry = QLineEdit(
+            "Nenhuma passiva de suporte configurada"
+        )
+        supports_layout.addRow(
+            QLabel("Composição de suportes"), self.supports_entry
+        )
+        supports_layout.addRow(
+            QLabel("Bônus de suporte"), self.supports_bonus_entry
+        )
+        supports_layout.addRow(
+            QLabel("Passivas de suporte"), self.supports_passive_entry
+        )
         self.controls.addTab(supports, "Equipe Suportes")
 
         build = QWidget()
         build_layout = QFormLayout(build)
         self.echoes_entry = QLineEdit("Nenhum Echo configurado")
         self.echoes_bonus_entry = QLineEdit("0%")
-        self.echoes_passive_entry = QLineEdit("Nenhuma passiva de Echo configurada")
+        self.echoes_passive_entry = QLineEdit(
+            "Nenhuma passiva de Echo configurada"
+        )
         build_layout.addRow(QLabel("Echos equipados"), self.echoes_entry)
         build_layout.addRow(QLabel("Bônus dos Echos"), self.echoes_bonus_entry)
-        build_layout.addRow(QLabel("Passivas dos Echos"), self.echoes_passive_entry)
+        build_layout.addRow(
+            QLabel("Passivas dos Echos"), self.echoes_passive_entry
+        )
         self.controls.addTab(build, "Build Echos")
 
         markers = QWidget()
         markers_layout = QVBoxLayout(markers)
-        marker_text = QLabel("Marcadores temporais, condições e eventos da rotação.")
+        marker_text = QLabel(
+            "Marcadores temporais, condições e eventos da rotação."
+        )
         marker_text.setObjectName("muted")
         marker_text.setWordWrap(True)
         markers_layout.addWidget(marker_text)
@@ -220,12 +284,16 @@ class ResonatorTab(QWidget):
             tab_button = QPushButton(self.controls.tabText(index))
             tab_button.setObjectName("resonatorTabButton")
             tab_button.clicked.connect(
-                lambda _checked=False, tab_index=index: self.controls.setCurrentIndex(tab_index)
+                lambda _checked=False, i=index: self.controls.setCurrentIndex(
+                    i
+                )
             )
             row, column = divmod(index, 3)
             tab_grid.addWidget(tab_button, row, column)
         self.controls.currentChanged.connect(self._refresh_control_tab_buttons)
-        self._control_tab_buttons = list(tab_switcher.findChildren(QPushButton))
+        self._control_tab_buttons = list(
+            tab_switcher.findChildren(QPushButton)
+        )
         self._refresh_control_tab_buttons(0)
         left_layout.addWidget(tab_switcher)
         left_layout.addWidget(self.controls, 1)
@@ -251,11 +319,11 @@ class ResonatorTab(QWidget):
         root.addLayout(columns, 1)
 
         # A caixa escreve no idioma global; o sinal global redesenha os textos.
-        self.language_box.currentTextChanged.connect(language_settings().set_language)
-        language_settings().changed.connect(self._set_language)
-        self.element_box.currentTextChanged.connect(
-            self._element_changed
+        self.language_box.currentTextChanged.connect(
+            language_settings().set_language
         )
+        language_settings().changed.connect(self._set_language)
+        self.element_box.currentTextChanged.connect(self._element_changed)
 
     def _refresh_control_tab_buttons(self, active_index: int) -> None:
         for index, button in enumerate(self._control_tab_buttons):
@@ -275,16 +343,11 @@ class ResonatorTab(QWidget):
 
     @staticmethod
     def _element_icon(element: str) -> str:
-        return {
-            "Aero": "◈",
-            "Glacio": "❄",
-            "Electro": "✦",
-            "Fusion": "♢",
-            "Havoc": "◉",
-            "Spectro": "✧",
-        }.get(element, "✧")
+        return element_icon(element, fallback="✧")
 
     def _build_damage_tab(self) -> None:
+        # Keep ordered widget construction and painting steps together.
+        # pylint: disable=too-many-locals,too-many-statements
         tab = QWidget()
         outer_layout = QVBoxLayout(tab)
         scroll = QScrollArea()
@@ -309,21 +372,48 @@ class ResonatorTab(QWidget):
 
         self.damage_fields: dict[str, QDoubleSpinBox | QSpinBox] = {}
         groups = (
-            ("ATACANTE", (
-                ("attack_total", "ATK Total", 1500.0, 0.0, 99999.0),
-                ("skill_modifier", "Mod. Habilidade (%)", 120.0, 0.0, 99999.0),
-                ("damage_bonus", "Soma Bônus de Dano (%)", 20.0, 0.0, 99999.0),
-                ("crit_multiplier", "Mult. Crítico", 2.5, 0.0, 999.0),
-            )),
-            ("INIMIGO / DEFESA", (
-                ("defense_factor", "Fator de Defesa", 0.8, 0.0, 10.0),
-                ("resistance_factor", "Fator de Resistência", 1.0, 0.0, 10.0),
-            )),
-            ("DURAÇÃO & EXECUÇÃO", (
-                ("duration", "Duração (s)", 10.0, 0.1, 99999.0),
-                ("hits", "Hits", 1, 1, 999),
-                ("casts", "Casts", 1, 1, 999),
-            )),
+            (
+                "ATACANTE",
+                (
+                    ("attack_total", "ATK Total", 1500.0, 0.0, 99999.0),
+                    (
+                        "skill_modifier",
+                        "Mod. Habilidade (%)",
+                        120.0,
+                        0.0,
+                        99999.0,
+                    ),
+                    (
+                        "damage_bonus",
+                        "Soma Bônus de Dano (%)",
+                        20.0,
+                        0.0,
+                        99999.0,
+                    ),
+                    ("crit_multiplier", "Mult. Crítico", 2.5, 0.0, 999.0),
+                ),
+            ),
+            (
+                "INIMIGO / DEFESA",
+                (
+                    ("defense_factor", "Fator de Defesa", 0.8, 0.0, 10.0),
+                    (
+                        "resistance_factor",
+                        "Fator de Resistência",
+                        1.0,
+                        0.0,
+                        10.0,
+                    ),
+                ),
+            ),
+            (
+                "DURAÇÃO & EXECUÇÃO",
+                (
+                    ("duration", "Duração (s)", 10.0, 0.1, 99999.0),
+                    ("hits", "Hits", 1, 1, 999),
+                    ("casts", "Casts", 1, 1, 999),
+                ),
+            ),
         )
         groups_layout = QGridLayout()
         groups_layout.setHorizontalSpacing(10)
@@ -338,11 +428,17 @@ class ResonatorTab(QWidget):
             heading = QLabel(title)
             heading.setObjectName("damageGroupTitle")
             group_layout.addWidget(heading, 0, 0, 1, 2)
-            for row, (key, field_label, value, minimum, maximum) in enumerate(definitions, 1):
+            for row, (key, field_label, value, minimum, maximum) in enumerate(
+                definitions, 1
+            ):
                 label = QLabel(field_label)
                 label.setObjectName("damageInputLabel")
                 group_layout.addWidget(label, row, 0)
-                field = QSpinBox() if key in {"hits", "casts"} else QDoubleSpinBox()
+                field = (
+                    QSpinBox()
+                    if key in {"hits", "casts"}
+                    else QDoubleSpinBox()
+                )
                 field.setRange(minimum, maximum)
                 field.setValue(value)
                 if isinstance(field, QDoubleSpinBox):
@@ -361,7 +457,11 @@ class ResonatorTab(QWidget):
 
         results = QHBoxLayout()
         self.damage_stat_labels: dict[str, QLabel] = {}
-        for key, title in (("hit", "DANO BASE / HIT"), ("total", "DANO TOTAL"), ("dps", "DPS ESTIMADO")):
+        for key, title in (
+            ("hit", "DANO BASE / HIT"),
+            ("total", "DANO TOTAL"),
+            ("dps", "DPS ESTIMADO"),
+        ):
             card = QFrame()
             card.setObjectName("damageOutputCard")
             card_layout = QVBoxLayout(card)
@@ -379,7 +479,9 @@ class ResonatorTab(QWidget):
         self.damage_result = QLabel("Dano: -- | Total: -- | DPS: --")
         self.damage_result.setVisible(False)
         layout.addWidget(self.damage_result)
-        self.damage_details = QLabel("Execute o cálculo para ver a composição completa usada.")
+        self.damage_details = QLabel(
+            "Execute o cálculo para ver a composição completa usada."
+        )
         self.damage_details.setWordWrap(True)
         self.damage_details.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(self.damage_details)
@@ -387,7 +489,10 @@ class ResonatorTab(QWidget):
         self.controls.addTab(tab, "Relatorio DPS")
 
     def calculate_character_damage(self) -> None:
-        values = {key: field.value() for key, field in self.damage_fields.items()}
+        """Calculate per-hit damage and DPS for the selected character."""
+        values = {
+            key: field.value() for key, field in self.damage_fields.items()
+        }
         result = calculate_character_damage(**values)
         self.damage_stat_labels["hit"].setText(f"{result.damage_per_hit:,.0f}")
         self.damage_stat_labels["total"].setText(f"{result.total_damage:,.0f}")
@@ -405,32 +510,38 @@ class ResonatorTab(QWidget):
         escape = html.escape
         weapon_passive = self.weapon_passive_text or "Passiva não cadastrada"
         self.damage_details.setText(
-            "<b>Modelo utilizado</b><br>"
-            "Dano = (ATK Total x Mod. Habilidade) x (1 + soma dos bônus) x "
-            "Mult. Crítico x Fator de Defesa x Fator de Resistência<br><br>"
-            f"<b>Composição usada</b><br>Personagem: {escape(self.character_name.text())} "
-            f"(ID: {escape(self.current_id)})<br>"
-            f"Elemento: {escape(self.element_box.currentText())}<br>"
-            f"Habilidade: {escape(self.skill_type_box.currentText())}<br>"
-            f"Arma: {escape(self.weapon_name.text())}<br>"
-            f"Passiva da arma: {escape(weapon_passive)}<br>"
-            f"Suportes: {escape(self.supports_entry.text())}<br>"
-            f"Bônus de suporte: {escape(self.supports_bonus_entry.text())}<br>"
-            f"Passivas de suporte: {escape(self.supports_passive_entry.text())}<br>"
-            f"Echos: {escape(self.echoes_entry.text())}<br>"
-            f"Bônus dos Echos: {escape(self.echoes_bonus_entry.text())}<br>"
-            f"Passivas dos Echos: {escape(self.echoes_passive_entry.text())}<br><br>"
-            "<b>Etapas numéricas</b><br>"
-            f"ATK Total: {values['attack_total']:,.2f}<br>"
-            f"Mod. Habilidade: {values['skill_modifier']:,.2f}% (fator {skill_factor:,.4f})<br>"
-            f"ATK x habilidade: {base_value:,.2f}<br>"
-            f"Bônus somados: {values['damage_bonus']:,.2f}% (multiplicador {bonus_multiplier:,.4f})<br>"
-            f"Após bônus: {after_bonus:,.2f}<br>"
-            f"Mult. Crítico: {values['crit_multiplier']:,.4f} -> {after_critical:,.2f}<br>"
-            f"Fator de Defesa: {values['defense_factor']:,.4f} -> {after_defense:,.2f}<br>"
-            f"Fator de Resistência: {values['resistance_factor']:,.4f} -> {result.damage_per_hit:,.2f}<br>"
-            f"Hits: {values['hits']} | Casts: {values['casts']} | Duração: {values['duration']:,.2f}s<br>"
-            f"Total calculado: {result.total_damage:,.2f} | DPS: {result.dps:,.2f}"
+            "<b>Modelo utilizado</b><br>Dano = (ATK Total x Mod. Habilidade)"
+            " x (1 + soma dos bônus) x Mult. Crítico x Fator de Defesa x"
+            " Fator de Resistência<br><br><b>Composição"
+            f" usada</b><br>Personagem: {escape(self.character_name.text())}"
+            f" (ID: {escape(self.current_id)})<br>Elemento:"
+            f" {escape(self.element_box.currentText())}<br>Habilidade:"
+            f" {escape(self.skill_type_box.currentText())}<br>Arma:"
+            f" {escape(self.weapon_name.text())}<br>Passiva da arma:"
+            f" {escape(weapon_passive)}<br>Suportes:"
+            f" {escape(self.supports_entry.text())}<br>Bônus de suporte:"
+            f" {escape(self.supports_bonus_entry.text())}<br>Passivas de"
+            f" suporte: {escape(self.supports_passive_entry.text())}<br>Echos:"
+            f" {escape(self.echoes_entry.text())}<br>Bônus dos Echos:"
+            f" {escape(self.echoes_bonus_entry.text())}<br>Passivas dos Echos:"
+            f" {escape(self.echoes_passive_entry.text())}<br><br><b>Etapas"
+            " numéricas</b><br>ATK Total:"
+            f" {values['attack_total']:,.2f}<br>Mod. Habilidade:"
+            f" {values['skill_modifier']:,.2f}% (fator"
+            f" {skill_factor:,.4f})<br>ATK x habilidade:"
+            f" {base_value:,.2f}<br>Bônus somados:"
+            f" {values['damage_bonus']:,.2f}% (multiplicador"
+            f" {bonus_multiplier:,.4f})<br>Após bônus:"
+            f" {after_bonus:,.2f}<br>Mult. Crítico:"
+            f" {values['crit_multiplier']:,.4f} ->"
+            f" {after_critical:,.2f}<br>Fator de Defesa:"
+            f" {values['defense_factor']:,.4f} ->"
+            f" {after_defense:,.2f}<br>Fator de Resistência:"
+            f" {values['resistance_factor']:,.4f} ->"
+            f" {result.damage_per_hit:,.2f}<br>Hits: {values['hits']} | Casts:"
+            f" {values['casts']} | Duração:"
+            f" {values['duration']:,.2f}s<br>Total calculado:"
+            f" {result.total_damage:,.2f} | DPS: {result.dps:,.2f}"
         )
 
     def _render_character(self, character_id: str) -> None:
@@ -439,46 +550,61 @@ class ResonatorTab(QWidget):
         if character.element:
             self.element_box.setCurrentText(character.element)
         current_element = self.element_box.currentText()
-        self.element_badge.setText(f"{self._element_icon(current_element)} {current_element}")
+        self.element_badge.setText(
+            f"{self._element_icon(current_element)} {current_element}"
+        )
         self.element_badge.setProperty("element", current_element)
         self.element_badge.style().unpolish(self.element_badge)
         self.element_badge.style().polish(self.element_badge)
-        apply_element_glow(self.character_image, current_element, blur=12, opacity=85)
-        apply_element_glow(self.weapon_image, current_element, blur=10, opacity=70)
+        apply_element_glow(
+            self.character_image, current_element, blur=12, opacity=85
+        )
+        apply_element_glow(
+            self.weapon_image, current_element, blur=10, opacity=70
+        )
         for key, label in self.stat_labels.items():
             label.setText(str((character.stats or {}).get(key, "--")))
 
         if character.team_buffs:
             self.supports_bonus_entry.setText(
-                ", ".join(f"{name}: {value:g}%" for name, value in character.team_buffs)
+                ", ".join(
+                    f"{name}: {value:g}%"
+                    for name, value in character.team_buffs
+                )
             )
         if character.personal_buffs:
             self.supports_passive_entry.setText(
-                ", ".join(f"{name}: {value:g}%" for name, value in character.personal_buffs)
+                ", ".join(
+                    f"{name}: {value:g}%"
+                    for name, value in character.personal_buffs
+                )
             )
         self._render_texts(character)
-        self._load_image(character.image_character, self.character_image, "Sem imagem")
-        self._load_image(character.image_weapon, self.weapon_image, "Sem imagem")
+        self._load_image(
+            character.image_character, self.character_image, "Sem imagem"
+        )
+        self._load_image(
+            character.image_weapon, self.weapon_image, "Sem imagem"
+        )
 
     def _render_texts(self, character: Character) -> None:
-        """Tudo que depende do idioma (não recarrega imagens nem recalcula nada)."""
+        """
+        Tudo que depende do idioma (não recarrega imagens nem recalcula
+        nada).
+        """
         self.character_name.setText(character.name)
         self.character_quote.setText(" / ".join(character.quotes))
-        self.weapon_name.setText(character.weapon.name or "Arma não cadastrada")
+        self.weapon_name.setText(
+            character.weapon.name or "Arma não cadastrada"
+        )
         self._render_weapon(character.weapon)
         self._render_kit(character.skills)
 
     def apply_imported_stats(self, stats: dict[str, float]) -> None:
         """Aplica na aba os atributos reconhecidos de uma imagem."""
-        field_map = {
-            "hp": "Base HP",
-            "atk": "Base ATK",
-            "def": "Base DEF",
-            "crit_rate": "Crit Rate",
-            "crit_dmg": "Crit DMG",
-        }
         percent_fields = {"Crit Rate", "Crit DMG"}
-        for source_key, field_key in field_map.items():
+        for source_key in ("hp", "atk", "def", "crit_rate", "crit_dmg"):
+            field_key = catalog.STAT_LABELS[source_key]
             value = stats.get(source_key)
             if value is None:
                 continue
@@ -497,7 +623,9 @@ class ResonatorTab(QWidget):
     def _styled_text(cls, text: str, skill_name: bool = False) -> str:
         clean = cls._clean_display_text(text)
         escaped = html.escape(clean).replace("\n", "<br>")
-        if re.search(r"\b\d+(?:[.,]\d+)?\s*s(?:egundos?)?\b", clean, re.IGNORECASE):
+        if re.search(
+            r"\b\d+(?:[.,]\d+)?\s*s(?:egundos?)?\b", clean, re.IGNORECASE
+        ):
             return escaped
         if skill_name:
             return f'<span style="color:#D9B56D"><b>{escaped}</b></span>'
@@ -507,7 +635,8 @@ class ResonatorTab(QWidget):
             escaped,
         )
         escaped = re.sub(
-            r"\b(HP|ATK|DEF|Crit Rate|Crit DMG|Bônus|Passiva|Echos?|Aero|Glacio|Electro|Fusion|Havoc|Spectro)\b",
+            "\\b(HP|ATK|DEF|Crit Rate|Crit DMG|Bônus|Passiva|Echos?|Aero|G"
+            "lacio|Electro|Fusion|Havoc|Spectro)\\b",
             r'<span style="color:#D946EF"><b>\1</b></span>',
             escaped,
             flags=re.IGNORECASE,
@@ -533,7 +662,10 @@ class ResonatorTab(QWidget):
                 escaped,
             )
             escaped = re.sub(
-                r"\b(Dano Voltaico|ATQ Pesado|ATQ Básico|Habilidade de Ressonância|Liberação de Ressonância|Ascendência|Majestade|Proeza|Coroa de Vontades)\b",
+                r"\b(Dano Voltaico|ATQ Pesado|ATQ Básico|Habilidade de"
+                r" Ressonância|Liberação de"
+                r" Ressonância|Ascendência|Majestade|Proeza|Coroa de"
+                r" Vontades)\b",
                 r'<font color="#a855f7"><b>\1</b></font>',
                 escaped,
                 flags=re.IGNORECASE,
@@ -556,15 +688,21 @@ class ResonatorTab(QWidget):
             card = QFrame()
             card.setObjectName("skillCard")
             self._element_glow_widgets.append((card, 14, 90))
-            apply_element_glow(card, self.element_box.currentText(), blur=14, opacity=90)
+            apply_element_glow(
+                card, self.element_box.currentText(), blur=14, opacity=90
+            )
             card_layout = QHBoxLayout(card)
             card_layout.setContentsMargins(10, 8, 10, 8)
-            icon = QLabel(("⚔", "◉", "❧", "✦", "♣")[self.kit_layout.count() % 5])
+            icon = QLabel(
+                ("⚔", "◉", "❧", "✦", "♣")[self.kit_layout.count() % 5]
+            )
             icon.setObjectName("skillIcon")
             icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
             card_layout.addWidget(icon)
             text_layout = QVBoxLayout()
-            title = QLabel(self._styled_text(skill.name or "Habilidade", skill_name=True))
+            title = QLabel(
+                self._styled_text(skill.name or "Habilidade", skill_name=True)
+            )
             title.setObjectName("skillTitle")
             description = skill.description or "Sem descrição"
             description = self._format_skill_description(description)
@@ -587,10 +725,8 @@ class ResonatorTab(QWidget):
 
     def _set_language(self, language: str) -> None:
         self.language = language
-        if self.language_box.currentText() != language:
-            self.language_box.blockSignals(True)
+        with QSignalBlocker(self.language_box):
             self.language_box.setCurrentText(language)
-            self.language_box.blockSignals(False)
         if self.current_id:
             self._character = catalog.character(self.current_id, language)
             self._render_texts(self._character)
@@ -605,7 +741,9 @@ class ResonatorTab(QWidget):
                 return
             reply = self.network.get(QNetworkRequest(QUrl(url)))
             self._image_replies[url] = reply
-            reply.finished.connect(lambda: self._finish_image(reply, target, fallback, url))
+            reply.finished.connect(
+                lambda: self._finish_image(reply, target, fallback, url)
+            )
             return
         if not allows_local_image(url):
             target.setText(fallback)
@@ -616,7 +754,9 @@ class ResonatorTab(QWidget):
             return
         target.setPixmap(self._prepare_pixmap(pixmap, target))
 
-    def _finish_image(self, reply: object, target: QLabel, fallback: str, url: str) -> None:
+    def _finish_image(
+        self, reply: object, target: QLabel, fallback: str, url: str
+    ) -> None:
         try:
             data = _read_network_reply(reply)
             pixmap = QPixmap()
@@ -633,8 +773,16 @@ class ResonatorTab(QWidget):
         self._image_replies.pop(url, None)
 
     def _prepare_pixmap(self, pixmap: QPixmap, target: QLabel) -> QPixmap:
-        size = target.maximumSize() if target is self.weapon_image else target.size()
-        scaled = pixmap.scaled(size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        size = (
+            target.maximumSize()
+            if target is self.weapon_image
+            else target.size()
+        )
+        scaled = pixmap.scaled(
+            size,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
         return self._remove_edge_background(scaled)
 
     @staticmethod
@@ -659,12 +807,12 @@ class ResonatorTab(QWidget):
             return pixmap
 
         threshold = 24
-        pending = [(x, y) for x, y in (
+        pending = [
             *((x, 0) for x in range(width)),
             *((x, height - 1) for x in range(width)),
             *((0, y) for y in range(height)),
             *((width - 1, y) for y in range(height)),
-        )]
+        ]
         visited: set[tuple[int, int]] = set()
         while pending:
             x, y = pending.pop()
@@ -672,16 +820,27 @@ class ResonatorTab(QWidget):
                 continue
             visited.add((x, y))
             color = image.pixelColor(x, y)
-            if color.alpha() < 16 or max(
-                abs(color.red() - background[0]),
-                abs(color.green() - background[1]),
-                abs(color.blue() - background[2]),
-            ) > threshold:
+            if (
+                color.alpha() < 16
+                or max(
+                    abs(color.red() - background[0]),
+                    abs(color.green() - background[1]),
+                    abs(color.blue() - background[2]),
+                )
+                > threshold
+            ):
                 continue
             color.setAlpha(0)
             image.setPixelColor(x, y, color)
-            pending.extend((neighbor_x, neighbor_y) for neighbor_x, neighbor_y in (
-                (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)
-            ) if 0 <= neighbor_x < width and 0 <= neighbor_y < height)
+            pending.extend(
+                (neighbor_x, neighbor_y)
+                for neighbor_x, neighbor_y in (
+                    (x - 1, y),
+                    (x + 1, y),
+                    (x, y - 1),
+                    (x, y + 1),
+                )
+                if 0 <= neighbor_x < width and 0 <= neighbor_y < height
+            )
 
         return QPixmap.fromImage(image)

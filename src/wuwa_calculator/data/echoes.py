@@ -1,7 +1,9 @@
 """Local Echo catalog used by the visual team builder."""
 
-# * EDITAVEL: adicione Echoes usando ID, nome, custo, elemento, Sonata, icone e imagem webp.
-# ! Os IDs salvos nas equipes devem permanecer estaveis para preservar configuracoes antigas.
+# * EDITAVEL: adicione Echoes usando ID, nome, custo, elemento, Sonata,
+# icone e imagem webp.
+# ! Os IDs salvos nas equipes devem permanecer estaveis para preservar
+# configuracoes antigas.
 ECHOES_DB: dict[str, dict[str, object]] = {
     "inferno_rider": {
         "name": "Inferno Rider",
@@ -9,7 +11,9 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Fusion",
         "sonata": "Molten Rift",
         "icon": "🔥",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/inferno-rider.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/inferno-rider.webp"
+        ),
     },
     "fiery_phoenix": {
         "name": "Crownless",
@@ -33,7 +37,9 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Havoc",
         "sonata": "Sun-sinking Eclipse",
         "icon": "🐺",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/havoc-dreadmane.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/havoc-dreadmane.webp"
+        ),
     },
     "fallacy_of_no_return": {
         "name": "Fallacy of No Return",
@@ -41,7 +47,10 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Aero",
         "sonata": "Moonlit Clouds",
         "icon": "◈",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/fallacy-of-no-return.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/fallacy-of-no-retur"
+            "n.webp"
+        ),
     },
     "impermanence_heron": {
         "name": "Impermanence Heron",
@@ -49,7 +58,9 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Aero",
         "sonata": "Moonlit Clouds",
         "icon": "🪽",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/impermanence_heron.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/impermanence_heron.webp"
+        ),
     },
     "bell_borne_geochelone": {
         "name": "Bell-Borne Geochelone",
@@ -57,7 +68,10 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Glacio",
         "sonata": "Rejuvenating Glow",
         "icon": "◉",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/bell-borne-geochelone.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/bell-borne-geochelo"
+            "ne.webp"
+        ),
     },
     "lampylumen": {
         "name": "Lampylumen Myriad",
@@ -73,7 +87,9 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Electro",
         "sonata": "Void Thunder",
         "icon": "⚡",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/tempest-mephis.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/tempest-mephis.webp"
+        ),
     },
     "violet_feathered_heron": {
         "name": "Violet-Feathered Heron",
@@ -81,7 +97,10 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Electro",
         "sonata": "Void Thunder",
         "icon": "✦",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/violet-feathered-heron.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/violet-feathered-he"
+            "ron.webp"
+        ),
     },
     "jue": {
         "name": "Jué",
@@ -97,6 +116,8 @@ ECHOES_DB: dict[str, dict[str, object]] = {
         "element": "Spectro",
         "sonata": "Celestial Light",
         "icon": "◇",
-        "image": "https://rackoon.com.br/images/wuwa/echoes/spectro-prism.webp",
+        "image": (
+            "https://rackoon.com.br/images/wuwa/echoes/spectro-prism.webp"
+        ),
     },
 }
