@@ -103,8 +103,24 @@ def main() -> None:
     config = engine.AnalyzerConfig()
     config.verbose = False
     result = engine.analyze_video(video, float(start), float(end), config)
+    # Todos os campos que a revisão e o registro de treino precisam
+    # (confirmado, empilhado, posição e tamanho do número no vídeo).
     events = [
-        {"timestamp": float(e.timestamp), "damage": float(e.damage)}
+        {
+            "timestamp": float(e.timestamp),
+            "damage": float(e.damage),
+            "center_x": float(e.center_x),
+            "center_y": float(e.center_y),
+            "width": float(e.width),
+            "height": float(e.height),
+            "color_score": float(e.color_score),
+            "observations": int(e.observations),
+            "repeats": int(e.repeats),
+            "digit_pitch": float(e.digit_pitch),
+            "confirmed": bool(e.confirmed),
+            "stacked": bool(e.stacked),
+            "verified": bool(e.verified),
+        }
         for e in sorted(result.events, key=lambda e: float(e.timestamp))
     ]
     data = {name: int(getattr(result, name, 0)) for name in STATS}
