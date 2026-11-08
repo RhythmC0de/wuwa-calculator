@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from wuwa_calculator.ui.components.components import TitleLabel
 
-VERSION = "1.4.0"
+VERSION = "1.4.1B"
 
 
 def _readme_path() -> Path:

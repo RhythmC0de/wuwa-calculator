@@ -32,3 +32,8 @@ Wuwa Damage Lab/
 
 # OS generated files
 *.so
+
+# cache
+.cache/
+.ruff_cache/
+.mypy_cache/

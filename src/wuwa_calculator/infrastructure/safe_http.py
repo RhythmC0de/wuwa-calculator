@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 from wuwa_calculator.infrastructure.url_policy import allows_remote_content
 
-USER_AGENT = "Tethys/1.4 (+desktop)"
+USER_AGENT = "Tethys/1.4.1B (+desktop)"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 MAX_HTML_BYTES = 8 * 1024 * 1024

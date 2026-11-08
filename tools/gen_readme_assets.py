@@ -226,7 +226,7 @@ def banner(_theme, p):
         f"{MONO}"
         '" font-size="12" letter-spacing="2" fill="'
         f"{p['gold2']}"
-        '">v1.4</text>\n'
+        '">v1.4.1B</text>\n'
         f"{bracket(18, 18, 1, 1, p['gold'])}"
         f"{bracket(width - 18, 18, -1, 1, p['gold'])}"
         "\n"
