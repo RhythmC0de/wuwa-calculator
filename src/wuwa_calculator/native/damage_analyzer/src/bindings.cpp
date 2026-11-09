@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <array>
+#include <filesystem>
 #include <memory>
 
 #include "candidate_filter.hpp"
@@ -8,6 +10,8 @@
 
 #include "analyzer.hpp"
 #include "event_crop.hpp"
+#include "ort_utils.hpp"
+#include "text_reader.hpp"
 
 // [OPTIONAL DIAGNOSTICS]
 // These three headers are only needed by the diagnostic Python exports
@@ -21,8 +25,9 @@ namespace py = pybind11;
 PYBIND11_MODULE(damage_analyzer, m) {
     m.doc() = "Wuthering Waves damage analyzer";
     // Nível da API Python. O aplicativo exige >= 3 (AnalyzerConfig,
-    // CancelToken, estatísticas e extract_event_crops).
-    m.attr("API_LEVEL") = 3;
+    // CancelToken, estatísticas e extract_event_crops). O nível 4 acrescenta
+    // read_text (leitura de texto de imagens, ex.: ficha de status).
+    m.attr("API_LEVEL") = 4;
 
     py::class_<damage_analyzer::DamageEvent>(m, "DamageEvent")
         .def_readonly("timestamp",
@@ -245,6 +250,130 @@ PYBIND11_MODULE(damage_analyzer, m) {
         "Analyze a video and extract damage events. "
         "end_time <= 0 analyzes until the end of the video."
     );
+
+
+    py::class_<damage_analyzer::TextLine>(m, "TextLine")
+        .def_readonly("text", &damage_analyzer::TextLine::text)
+        .def_readonly("confidence", &damage_analyzer::TextLine::confidence)
+        .def_readonly("x", &damage_analyzer::TextLine::x)
+        .def_readonly("y", &damage_analyzer::TextLine::y)
+        .def_readonly("width", &damage_analyzer::TextLine::width)
+        .def_readonly("height", &damage_analyzer::TextLine::height);
+
+    // Lê o texto de uma imagem (ex.: ficha de status). Sem `boxes`, as
+    // linhas vêm do detector (models/ocr/ppocrv5_det.onnx). Com `boxes`
+    // ([x, y, largura, altura]), só reconhece o texto dentro delas.
+    m.def(
+        "read_text",
+        [](const std::string& image_path,
+           const std::string& detection_model_path,
+           const std::vector<std::array<int, 4>>& boxes,
+           bool enhance,
+           double min_confidence) {
+            namespace da = damage_analyzer;
+            std::vector<da::TextLine> lines;
+            {
+                py::gil_scoped_release release;
+
+                const cv::Mat image = da::read_image_utf8(image_path);
+                if (image.empty()) {
+                    throw std::runtime_error(
+                        "Could not read image: " + image_path);
+                }
+
+                const std::filesystem::path models_dir =
+                    da::find_models_directory();
+                if (models_dir.empty()) {
+                    throw std::runtime_error(
+                        "OCR models not found. "
+                        "Set DAMAGE_ANALYZER_MODELS_DIR.");
+                }
+
+                da::DamageOCR ocr(
+                    da::to_utf8(models_dir / "en_PP-OCRv5_rec_mobile.onnx"),
+                    da::to_utf8(models_dir / "ppocrv5_en_dict.txt"));
+
+                std::vector<cv::Rect> rects;
+                rects.reserve(boxes.size());
+                for (const auto& b : boxes) {
+                    rects.emplace_back(b[0], b[1], b[2], b[3]);
+                }
+
+                // Com o modelo de detecção (DBNet) usa ele; sem o modelo cai
+                // no detector clássico, que dispensa arquivo.
+                std::unique_ptr<da::TextDetector> detector;
+                if (rects.empty()) {
+                    const std::string det_path = detection_model_path.empty()
+                        ? da::to_utf8(models_dir / "ppocrv5_det.onnx")
+                        : detection_model_path;
+                    if (std::filesystem::is_regular_file(
+                            da::utf8_path(det_path))) {
+                        detector =
+                            std::make_unique<da::TextDetector>(det_path);
+                    }
+                }
+
+                da::ReadTextOptions options;
+                options.enhance = enhance;
+                options.min_confidence = min_confidence;
+                lines = da::read_text_lines(
+                    image, ocr, detector.get(), rects, options);
+            }
+            return lines;
+        },
+        py::arg("image_path"),
+        py::arg("detection_model_path") = std::string(),
+        py::arg("boxes") = std::vector<std::array<int, 4>>(),
+        py::arg("enhance") = false,
+        py::arg("min_confidence") = 0.3);
+
+    // Caixas de texto pelo detector clássico (sem modelo).
+    m.def(
+        "detect_text_boxes",
+        [](const std::string& image_path) {
+            namespace da = damage_analyzer;
+            std::vector<std::array<int, 4>> result;
+            {
+                py::gil_scoped_release release;
+                const cv::Mat image = da::read_image_utf8(image_path);
+                if (image.empty()) {
+                    throw std::runtime_error(
+                        "Could not read image: " + image_path);
+                }
+                for (const auto& r : da::detect_text_classic(image)) {
+                    result.push_back({r.x, r.y, r.width, r.height});
+                }
+            }
+            return result;
+        },
+        py::arg("image_path"));
+
+    // Só para testes: caixas a partir de um mapa de probabilidade.
+    m.def(
+        "_boxes_from_probability_map",
+        [](const std::vector<std::vector<float>>& rows,
+           int image_width,
+           int image_height) {
+            std::vector<std::array<int, 4>> result;
+            if (rows.empty() || rows[0].empty()) {
+                return result;
+            }
+            cv::Mat map(static_cast<int>(rows.size()),
+                        static_cast<int>(rows[0].size()), CV_32F);
+            for (int y = 0; y < map.rows; ++y) {
+                for (int x = 0; x < map.cols; ++x) {
+                    map.at<float>(y, x) = rows[y][x];
+                }
+            }
+            const auto detected_boxes =
+                damage_analyzer::boxes_from_probability_map(
+                    map, cv::Size(image_width, image_height));
+            for (const cv::Rect& r : detected_boxes) {
+                result.push_back({r.x, r.y, r.width, r.height});
+            }
+            return result;
+        },
+        py::arg("rows"), py::arg("image_width"), py::arg("image_height"));
 
     m.def(
         "extract_event_crops",

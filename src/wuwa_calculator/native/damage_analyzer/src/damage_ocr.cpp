@@ -4,6 +4,10 @@
 #include "platform.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <cstdlib>
+#include <iomanip>
+#include <sstream>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -12,6 +16,7 @@
 #include <string>
 #include <stdexcept>
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 namespace damage_analyzer {
@@ -160,17 +165,27 @@ DamageOCR::DamageOCR(
 // recognize
 // ============================================================
 
-std::vector<OCRResult> DamageOCR::recognize(
-    const cv::Mat& image
+std::string DamageOCR::infer_text(
+    const cv::Mat& source,
+    int max_width,
+    double& confidence
 ) const {
-    std::vector<OCRResult> results;
+    confidence = 0.0;
 
-    if (image.empty()) {
-        return results;
+    if (source.empty() || !session_) {
+        return std::string();
     }
 
-    if (!session_) {
-        return results;
+    // O modelo espera 3 canais (BGR).
+    cv::Mat image;
+    if (source.channels() == 3) {
+        image = source;
+    } else if (source.channels() == 1) {
+        cv::cvtColor(source, image, cv::COLOR_GRAY2BGR);
+    } else if (source.channels() == 4) {
+        cv::cvtColor(source, image, cv::COLOR_BGRA2BGR);
+    } else {
+        return std::string();
     }
 
     // --------------------------------------------------------
@@ -192,7 +207,7 @@ std::vector<OCRResult> DamageOCR::recognize(
         std::clamp(
             resized_width,
             1,
-            OCR_MAX_WIDTH
+            max_width
         );
 
     cv::Mat resized;
@@ -341,7 +356,7 @@ std::vector<OCRResult> DamageOCR::recognize(
     );
 
     if (outputs.empty()) {
-        return results;
+        return std::string();
     }
 
     auto& output = outputs[0];
@@ -393,8 +408,6 @@ std::vector<OCRResult> DamageOCR::recognize(
     // CTC decoding
     // --------------------------------------------------------
 
-    double confidence = 0.0;
-
     const std::string text =
         decode_ctc(
             output_data,
@@ -402,6 +415,63 @@ std::vector<OCRResult> DamageOCR::recognize(
             classes,
             confidence
         );
+
+    // Diagnóstico (DAMAGE_ANALYZER_DEBUG_OCR=<pasta>): grava os primeiros
+    // recortes enviados ao OCR e o texto cru que o modelo devolveu.
+    if (const char* debug_dir = std::getenv("DAMAGE_ANALYZER_DEBUG_OCR")) {
+        static std::atomic<int> debug_count{0};
+        const int number = debug_count.fetch_add(1);
+        if (number < 80 && *debug_dir != '\0') {
+            float lo = 1e9f, hi = -1e9f;
+            for (const float v : input_data) {
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
+            }
+            std::size_t non_blank = 0;
+            for (std::size_t t = 0; t < timesteps; ++t) {
+                const float* row = output_data + t * classes;
+                const std::size_t best = static_cast<std::size_t>(
+                    std::max_element(row, row + classes) - row);
+                if (best != 0) {
+                    ++non_blank;
+                }
+            }
+            std::ostringstream name;
+            name << debug_dir << "/ocr_" << std::setw(3)
+                 << std::setfill('0') << number << ".png";
+            cv::imwrite(name.str(), image);
+            std::ofstream log(
+                std::string(debug_dir) + "/ocr_log.txt", std::ios::app);
+            log << number << " img=" << image.cols << "x" << image.rows
+                << " ch=" << image.channels()
+                << " input[min,max]=" << lo << "," << hi
+                << " steps=" << timesteps << " classes=" << classes
+                << " non_blank_steps=" << non_blank
+                << " conf=" << confidence
+                << " text='" << text << "'\n";
+        }
+    }
+
+    return text;
+}
+
+std::string DamageOCR::read_text(
+    const cv::Mat& image,
+    double& confidence,
+    int max_width
+) const {
+    return infer_text(image, max_width, confidence);
+}
+
+std::vector<OCRResult> DamageOCR::recognize(
+    const cv::Mat& image
+) const {
+    std::vector<OCRResult> results;
+
+    double confidence = 0.0;
+
+    const std::string text =
+        infer_text(image, OCR_MAX_WIDTH, confidence);
 
     // --------------------------------------------------------
     // Extract digits

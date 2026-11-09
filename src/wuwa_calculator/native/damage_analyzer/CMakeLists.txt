@@ -43,6 +43,13 @@ find_package(OpenCV REQUIRED COMPONENTS
     videoio
 )
 
+# OpenCV 5 moved shape geometry out of imgproc.
+if(OpenCV_VERSION VERSION_GREATER_EQUAL "5.0")
+    find_package(OpenCV REQUIRED COMPONENTS
+        core imgproc imgcodecs videoio geometry
+    )
+endif()
+
 # ---------------------------------------------------------------------------
 # ONNX Runtime
 # ---------------------------------------------------------------------------
@@ -105,18 +112,22 @@ if(NOT _ort_root)
             "automático. Defina -DONNXRUNTIME_ROOT=<pasta>.")
     endif()
 
-    set(_ort_base
-        "https://github.com/microsoft/onnxruntime/releases/download/v${DAMAGE_ANALYZER_ORT_VERSION}")
+    string(CONCAT _ort_base
+        "https://github.com/microsoft/onnxruntime/releases/download/v"
+        "${DAMAGE_ANALYZER_ORT_VERSION}")
 
     if(WIN32)
-        set(_ort_url
-            "${_ort_base}/onnxruntime-win-${_ort_arch_win}-${DAMAGE_ANALYZER_ORT_VERSION}.zip")
+        string(CONCAT _ort_url
+            "${_ort_base}/onnxruntime-win-${_ort_arch_win}-"
+            "${DAMAGE_ANALYZER_ORT_VERSION}.zip")
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        set(_ort_url
-            "${_ort_base}/onnxruntime-linux-${_ort_arch_linux}-${DAMAGE_ANALYZER_ORT_VERSION}.tgz")
+        string(CONCAT _ort_url
+            "${_ort_base}/onnxruntime-linux-${_ort_arch_linux}-"
+            "${DAMAGE_ANALYZER_ORT_VERSION}.tgz")
     else()
         message(FATAL_ERROR
-            "Sistema ${CMAKE_SYSTEM_NAME} não suportado. Use Windows ou Linux.")
+            "Sistema ${CMAKE_SYSTEM_NAME} não suportado. "
+            "Use Windows ou Linux.")
     endif()
 
     message(STATUS "Baixando ONNX Runtime: ${_ort_url}")
@@ -229,6 +240,8 @@ add_library(damage_core STATIC
     src/temporal_filter.cpp
     src/event_tracker.cpp
     src/event_crop.cpp
+    src/text_reader.cpp
+    src/classic_text_detector.cpp
     src/platform.cpp
 )
 
@@ -248,9 +261,11 @@ set_target_properties(damage_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
 
+set(_source_models_dir "${CMAKE_CURRENT_SOURCE_DIR}/models/ocr")
+
 target_compile_definitions(damage_core
     PRIVATE
-        "DAMAGE_ANALYZER_SOURCE_MODELS_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/models/ocr\""
+        "DAMAGE_ANALYZER_SOURCE_MODELS_DIR=\"${_source_models_dir}\""
     PUBLIC
         $<$<PLATFORM_ID:Windows>:NOMINMAX>
         $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>
@@ -298,7 +313,7 @@ function(damage_analyzer_stage_runtime target)
         COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_FILE_DIR:${target}>/models/ocr"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/models/ocr/en_PP-OCRv5_rec_mobile.onnx"
+            "${_source_models_dir}/en_PP-OCRv5_rec_mobile.onnx"
             "${CMAKE_CURRENT_SOURCE_DIR}/models/ocr/ppocrv5_en_dict.txt"
             "$<TARGET_FILE_DIR:${target}>/models/ocr"
         VERBATIM

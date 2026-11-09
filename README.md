@@ -165,14 +165,34 @@ python -m venv .venv
 
 ### 2. Engine de vídeo (opcional, para a análise)
 
-Ferramentas: **CMake 3.20+**, compilador **C++20**, **OpenCV** (`core`, `videoio`, `imgproc`), **pybind11** e **ONNX Runtime** em `src/wuwa_calculator/native/damage_analyzer/third_party/onnxruntime`.
+Ferramentas: **CMake 3.21+**, compilador **C++20**, **OpenCV**
+(`core`, `imgproc`, `imgcodecs`, `videoio`; também `geometry` no OpenCV 5)
+e **pybind11** instalado no ambiente virtual. O **ONNX Runtime** é baixado
+pelo CMake, ou pode ser fornecido em
+`src/wuwa_calculator/native/damage_analyzer/third_party/onnxruntime`.
 
 ```bash
-cmake -S src/wuwa_calculator/native/damage_analyzer -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake -S src/wuwa_calculator/native/damage_analyzer \
+  -B src/wuwa_calculator/native/damage_analyzer/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DPython_EXECUTABLE="$PWD/.venv/bin/python"
+cmake --build src/wuwa_calculator/native/damage_analyzer/build --parallel 2
 ```
 
-> **Atenção:** o módulo gerado carrega o número da versão do Python (por exemplo `cpython-312`). Compile com o **mesmo Python do `.venv`** e confirme com `python -c "import damage_analyzer"`.
+> **Atenção:** compile com o **mesmo Python da `.venv`**. O nome do módulo
+> inclui a versão do interpretador (por exemplo, `cpython-314`).
+
+Confirme o carregamento a partir da raiz do projeto:
+
+```bash
+.venv/bin/python - <<'PYTHON'
+from wuwa_calculator.infrastructure.native_engine import load_engine
+print(load_engine().API_LEVEL)
+PYTHON
+```
+
+No Windows, use o caminho absoluto de `.venv/Scripts/python.exe`
+para `Python_EXECUTABLE` e para executar a verificação.
 
 ### Linux · AppImage planejado
 

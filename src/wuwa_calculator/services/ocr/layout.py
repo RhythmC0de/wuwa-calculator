@@ -14,12 +14,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 # Painel de totais precisa de pelo menos estes stats e deste tamanho.
 MIN_PANEL_KEYS = 7
 CORE_KEYS = ("hp", "atk", "def")
 FLAT_MINIMUMS = {"hp": 1500.0, "atk": 200.0, "def": 100.0}
 MAX_PERCENT = 400.0
+# Um número só vale como total com esta confiança (ruído de ícone sai com 0.3).
+MIN_VALUE_CONFIDENCE = 0.6
+# Parecido o bastante com um rótulo conhecido (texto pequeno erra uma letra).
+FUZZY_LABEL_RATIO = 0.86
 
 
 @dataclass(frozen=True)
@@ -61,7 +66,7 @@ LABELS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("crit_dmg", r"crit(?:ical)?\.?\s*(?:dmg|damage|dano)"),
         ("elemental_dmg", rf"{_ELEMENTS}\s*dmg(?:\s*bonus)?"),
         ("basic_atk_dmg", r"basic\s*attack\s*dmg(?:\s*bonus)?"),
-        ("heavy_atk_dmg", r"heavy\s*attack\s*dmg(?:\s*bonus)?"),
+        ("heavy_atk_dmg", r"heavy(?:\s*attack)?(?:\s*dmg(?:\s*bonus)?)?"),
         ("skill_dmg", rf"{_PREFIX}skill\s*dmg(?:\s*bonus)?"),
         ("liberation_dmg", rf"{_PREFIX}liberation\s*dmg(?:\s*bonus)?"),
         ("healing_bonus", r"healing\s*bonus"),
@@ -99,11 +104,62 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().lower())
 
 
+_CANONICAL_LABELS: tuple[tuple[str, str], ...] = (
+    ("energy_regen", "energy regen"),
+    ("energy_regen", "energy recharge"),
+    ("crit_rate", "crit rate"),
+    ("crit_dmg", "crit dmg"),
+    *(
+        ("elemental_dmg", f"{name} dmg")
+        for name in (
+            "electro",
+            "spectro",
+            "havoc",
+            "fusion",
+            "glacio",
+            "aero",
+        )
+    ),
+    ("basic_atk_dmg", "basic attack dmg"),
+    ("heavy_atk_dmg", "heavy attack dmg"),
+    ("skill_dmg", "skill dmg"),
+    ("skill_dmg", "res skill dmg"),
+    ("liberation_dmg", "liberation dmg"),
+    ("liberation_dmg", "res liberation dmg"),
+    ("healing_bonus", "healing"),
+)
+
+
+def _fuzzy_label(cleaned: str) -> str | None:
+    """Rótulo parecido com um conhecido ("Res. Skil DMG", "Basic Attck")."""
+    text = re.sub(r"[^a-z ]", "", cleaned).replace("resonance", "res")
+    text = re.sub(r"\s+", " ", re.sub(r"\bbonus\b", "", text)).strip()
+    if len(text) < 7:
+        return None
+    best_key, best_ratio = None, 0.0
+    for key, canonical in _CANONICAL_LABELS:
+        ratio = SequenceMatcher(None, text, canonical).ratio()
+        if ratio > best_ratio:
+            best_key, best_ratio = key, ratio
+    return best_key if best_ratio >= FUZZY_LABEL_RATIO else None
+
+
 def classify_label(text: str) -> str | None:
     """Match an OCR line to a recognized character attribute label."""
-    cleaned = _normalise(text).rstrip(":=")
-    for key, pattern in LABELS:
-        if pattern.fullmatch(cleaned):
+    base = _normalise(text).rstrip(":=")
+    # O ícone ao lado do rótulo costuma virar 1 ou 2 caracteres de lixo.
+    variants = (
+        base,
+        re.sub(r"^[^a-z]{1,3}", "", base),
+        re.sub(r"^[a-z]\s+(?=[a-z])", "", base),
+    )
+    for cleaned in variants:
+        for key, pattern in LABELS:
+            if pattern.fullmatch(cleaned):
+                return key
+    for cleaned in variants:
+        key = _fuzzy_label(cleaned)
+        if key is not None:
             return key
     return None
 
@@ -119,7 +175,10 @@ class _Pair:
 
 def _is_value(line: TextLine) -> bool:
     # "12450 + 5030.0" e "+70.5%" (bônus embaixo do total) não são totais.
-    return bool(_VALUE_ONLY.fullmatch(line.text.strip()))
+    return (
+        line.confidence >= MIN_VALUE_CONFIDENCE
+        and bool(_VALUE_ONLY.fullmatch(line.text.strip()))
+    )
 
 
 def _pairs(lines: list[TextLine]) -> list[_Pair]:
@@ -163,9 +222,7 @@ def _pairs(lines: list[TextLine]) -> list[_Pair]:
                 candidates.append(value)
         if not candidates:
             continue
-        tallest = max(v.height for v in candidates)
-        large = [v for v in candidates if v.height >= tallest * 0.7]
-        best = min(large, key=lambda v, right=label.right: v.left - right)
+        best = min(candidates, key=lambda v, right=label.right: v.left - right)
         number = clean_number(best.text)
         if number is not None:
             pairs.append(_Pair(key, number, "%" in best.text, label, best))
@@ -195,6 +252,29 @@ def _columns(pairs: list[_Pair], tolerance: float) -> list[list[_Pair]]:
     return columns
 
 
+def _drop_misaligned(column: list[_Pair], tolerance: float) -> list[_Pair]:
+    """Tira números fora do alinhamento da coluna.
+
+    Os valores de um painel ficam alinhados pela direita (ou pela esquerda).
+    Se o número certo não foi lido, o "mais próximo" pode ser de outro painel
+    (um Echo ao lado); ele aparece fora desse alinhamento e é descartado.
+    """
+    with_value = [p for p in column if p.value_line is not None]
+    if len(with_value) < 3:
+        return column
+    rights = sorted(p.value_line.right for p in with_value)
+    lefts = sorted(p.value_line.left for p in with_value)
+    median_right = rights[len(rights) // 2]
+    median_left = lefts[len(lefts) // 2]
+    return [
+        p
+        for p in column
+        if p.value_line is None
+        or abs(p.value_line.right - median_right) <= tolerance
+        or abs(p.value_line.left - median_left) <= tolerance
+    ]
+
+
 def _first_by_key(pairs: list[_Pair]) -> dict[str, _Pair]:
     result: dict[str, _Pair] = {}
     for pair in sorted(pairs, key=lambda p: p.label.y):
@@ -221,6 +301,9 @@ def find_totals(lines: list[TextLine]) -> dict[str, float] | None:
         return None
     width = max((line.right for line in lines), default=1.0)
     columns = _columns(pairs, tolerance=max(8.0, 0.012 * width))
+    heights = sorted(p.label.height for p in pairs)
+    align = max(2.5 * heights[len(heights) // 2], 0.02 * width)
+    columns = [_drop_misaligned(column, align) for column in columns]
 
     candidates: list[dict[str, _Pair]] = []
     for i, first in enumerate(columns):

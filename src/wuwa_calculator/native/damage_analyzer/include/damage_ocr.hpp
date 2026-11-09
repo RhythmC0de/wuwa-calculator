@@ -31,7 +31,22 @@ public:
         const cv::Mat& image
     ) const;
 
+    // Lê o texto completo de uma linha (letras, números e símbolos do
+    // dicionário), sem filtrar dígitos. `confidence` recebe a média das
+    // probabilidades dos caracteres. Devolve "" se nada foi lido.
+    std::string read_text(
+        const cv::Mat& image,
+        double& confidence,
+        int max_width = 1280
+    ) const;
+
 private:
+    std::string infer_text(
+        const cv::Mat& image,
+        int max_width,
+        double& confidence
+    ) const;
+
     static bool is_valid_numeric_reading(int value);
     static std::string extract_digits(
         const std::string& text

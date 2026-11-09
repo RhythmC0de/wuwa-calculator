@@ -19,6 +19,7 @@ from wuwa_calculator.services.characters.identity import (
     normalized_id_map,
 )
 from wuwa_calculator.services.image.image_processing import prepare_for_ocr
+from wuwa_calculator.services.ocr import native_reader
 from wuwa_calculator.services.ocr.layout import (
     FLAT_MINIMUMS,
     TextLine,
@@ -247,7 +248,7 @@ def extract_stats_from_text(text: str) -> dict[str, float]:
 
 
 def extract_stats_from_image(path: str | Path) -> dict[str, float]:
-    """Imagem → PaddleOCR → texto → dicionário de stats."""
+    """Imagem → OCR → dicionário de atributos."""
     stats, _ = extract_image_data(path)
     return stats
 
@@ -257,6 +258,33 @@ def extract_image_data(
 ) -> tuple[dict[str, float], str | None]:
     """Imagem → texto, atributos reconhecidos e personagem identificado."""
     path = Path(path)
+    lines = native_reader.read_lines(path)
+    if lines is not None:
+        text = "\n".join(line.text for line in lines)
+        totals = find_totals(lines)
+        if totals is not None:
+            return totals, identify_character(text)
+        stats = extract_stats_from_text(text)
+        if len(stats) < 3:
+            enhanced_lines = native_reader.read_lines(path, enhance=True)
+            if enhanced_lines is not None:
+                enhanced_text = "\n".join(
+                    line.text for line in enhanced_lines
+                )
+                text = "\n".join(
+                    part for part in (text, enhanced_text) if part
+                )
+                enhanced_totals = find_totals(enhanced_lines)
+                if enhanced_totals is not None:
+                    return enhanced_totals, identify_character(text)
+        return extract_stats_from_text(text), identify_character(text)
+    return _extract_with_paddle(path)
+
+
+def _extract_with_paddle(
+    path: Path,
+) -> tuple[dict[str, float], str | None]:
+    """Use the optional PaddleOCR reader when native OCR is unavailable."""
     engine = _require_ocr_engine()
     result = engine.predict(str(path))
     text = extract_text_from_paddle_result(result)
