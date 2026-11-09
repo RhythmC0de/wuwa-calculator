@@ -5,8 +5,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-import pyqtgraph as pg
-from PySide6.QtCore import Qt, QThread, QTime, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTime, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -28,53 +27,6 @@ from wuwa_calculator.ui.workers.video_analysis_worker import (
     CvDamageAnalysisWorker,
     LiveDamageAnalysisWorker,
 )
-
-
-class DpsPlotWidget(pg.PlotWidget):
-    """DPS plot that emits the timestamp selected by the user."""
-
-    timestampClicked = Signal(float)
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        axis_items = {
-            "bottom": TimelineAxis(orientation="bottom"),
-            "left": NumericAxis(orientation="left"),
-            "right": NumericAxis(orientation="right"),
-        }
-        super().__init__(axisItems=axis_items, parent=parent)
-        self.scene().sigMouseClicked.connect(self._on_scene_clicked)
-
-    def _on_scene_clicked(self, event) -> None:
-        if event.button() != Qt.MouseButton.LeftButton:
-            return
-        view_box = self.getPlotItem().vb
-        if not view_box.sceneBoundingRect().contains(event.scenePos()):
-            return
-        point = view_box.mapSceneToView(event.scenePos())
-        if point.x() >= 0:
-            self.timestampClicked.emit(float(point.x()))
-
-
-class NumericAxis(pg.AxisItem):
-    # AxisItem provides SVG rendering through its graphics-item implementation.
-    # pylint: disable=abstract-method
-    """Format plot tick labels as grouped numeric values."""
-
-    def tickStrings(self, values, scale, spacing):
-        return [f"{value:,.0f}" for value in values]
-
-
-class TimelineAxis(pg.AxisItem):
-    # AxisItem provides SVG rendering through its graphics-item implementation.
-    # pylint: disable=abstract-method
-    """Format plot tick labels as minutes and seconds."""
-
-    def tickStrings(self, values, scale, spacing):
-        labels = []
-        for value in values:
-            total = max(0, int(value))
-            labels.append(f"{total // 60}:{total % 60:02d}")
-        return labels
 
 
 class DpsSimulationPanel(Card):
@@ -182,6 +134,53 @@ class DpsSimulationPanel(Card):
         self.review_support.hits_replaced.connect(self._replace_review_hits)
         self.review_support.totals_changed.connect(self._update_review_totals)
 
+        self.plot = None
+        self._plot_placeholder = QLabel(
+            "Selecione um vídeo para ver o gráfico"
+        )
+        self._plot_placeholder.setObjectName("dpsPlotPlaceholder")
+        self._plot_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._plot_placeholder.setMinimumHeight(141)
+        layout.addWidget(self._plot_placeholder, 1)
+
+        self.video_player.positionChanged.connect(
+            self._queue_position,
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self.video_player.durationChanged.connect(self._on_duration_changed)
+        self.video_player.videoLoaded.connect(self._on_video_loaded)
+        self.video_player.videoStopped.connect(self.stop_live_analysis)
+
+    @staticmethod
+    def _metric(layout: QHBoxLayout, title: str) -> QLabel:
+        label = QLabel(f"{title}: --")
+        label.setObjectName("dpsMetric")
+        layout.addWidget(label, 1)
+        return label
+
+    @staticmethod
+    def _time_box() -> QTimeEdit:
+        control = QTimeEdit(QTime(0, 0, 0))
+        control.setDisplayFormat("mm:ss")
+        control.setTimeRange(QTime(0, 0, 0), QTime(23, 59, 59))
+        control.setKeyboardTracking(False)
+        control.setFixedWidth(78)
+        return control
+
+    def _ensure_plot(self) -> None:
+        """Create plotting widgets once, when playback or results need them."""
+        if self.plot is None:
+            self._build_ui()
+            self._plot_placeholder.hide()
+
+    def _build_ui(self) -> None:
+        """Build the two timelines without delaying initial tab navigation."""
+        # Plotting is optional until a video or analysis result is available.
+        # pylint: disable=import-outside-toplevel,too-many-statements
+        import pyqtgraph as pg
+        from .dps_plot import DpsPlotWidget
+
+        layout = self.layout()
         self.plot = DpsPlotWidget(self)
         self.plot.setObjectName("dpsPlot")
         self.plot.getPlotItem().hideButtons()
@@ -277,34 +276,9 @@ class DpsSimulationPanel(Card):
         layout.addWidget(self.mini_plot)
 
         self.plot.timestampClicked.connect(self._seek_video)
-        self.video_player.media_player.positionChanged.connect(
-            self._queue_position,
-            Qt.ConnectionType.QueuedConnection,
-        )
-        self.video_player.media_player.durationChanged.connect(
-            self._on_duration_changed
-        )
-        self.video_player.videoLoaded.connect(self._on_video_loaded)
-        self.video_player.videoStopped.connect(self.stop_live_analysis)
-        self._render_curve()
-
-    @staticmethod
-    def _metric(layout: QHBoxLayout, title: str) -> QLabel:
-        label = QLabel(f"{title}: --")
-        label.setObjectName("dpsMetric")
-        layout.addWidget(label, 1)
-        return label
-
-    @staticmethod
-    def _time_box() -> QTimeEdit:
-        control = QTimeEdit(QTime(0, 0, 0))
-        control.setDisplayFormat("mm:ss")
-        control.setTimeRange(QTime(0, 0, 0), QTime(23, 59, 59))
-        control.setKeyboardTracking(False)
-        control.setFixedWidth(78)
-        return control
 
     def _render_curve(self) -> None:
+        self._ensure_plot()
         self.glow_curve.setData([], [])
         self.curve.setData([], [])
         self.damage_glow_curve.setData([], [])
@@ -353,6 +327,7 @@ class DpsSimulationPanel(Card):
         marker_times: list[float],
         x_duration: float | None = None,
     ) -> None:
+        self._ensure_plot()
         visible_duration = max(1.0, x_duration or self.duration_seconds)
         peak = max(values, default=1.0)
         total_damage = max(accumulated, default=0.0)
@@ -516,6 +491,7 @@ class DpsSimulationPanel(Card):
             self.analysis_status.setText("Carregue um vídeo primeiro")
 
     def _start_live_analysis(self, video_path: str) -> None:
+        self._ensure_plot()
         self.stop_live_analysis()
         self.review_support.reset()
         self._dps_start_time = self._analysis_start_seconds()
@@ -562,6 +538,7 @@ class DpsSimulationPanel(Card):
         thread.setPriority(QThread.Priority.LowPriority)
 
     def _on_analysis_completed(self, data: dict) -> None:
+        self._ensure_plot()
         last_hit = float(data.get("last_hit", -1.0))
         native_hits = int(data.get("total_hits", self._total_hits) or 0)
         native_damage = float(
@@ -758,7 +735,8 @@ class DpsSimulationPanel(Card):
         self._position_timer.stop()
         position_ms = self._pending_position_ms
         seconds = max(0.0, position_ms / 1000.0)
-        self.cursor.setValue(seconds)
+        if self.plot is not None:
+            self.cursor.setValue(seconds)
         self.position_label.setText(f"Cursor: {seconds:.2f}s")
         if self.live_worker is not None:
             self.live_worker.update_position(seconds)
@@ -770,9 +748,6 @@ class DpsSimulationPanel(Card):
 
 
 __all__ = [
-    "DpsPlotWidget",
-    "NumericAxis",
-    "TimelineAxis",
     "DpsSimulationPanel",
     "ANALYSIS_BUCKET_SECONDS",
     "CvDamageAnalysisWorker",

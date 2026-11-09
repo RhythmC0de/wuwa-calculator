@@ -242,14 +242,11 @@ def test_refactored_views_construct_without_network(
     monkeypatch.setattr(history_tab, "load_teams", lambda: [])
     monkeypatch.setattr(history_tab, "history_records", lambda: [])
     if view_name == "multimedia":
-        # Native audio services are unavailable in headless test environments.
-        media = Mock(spec=history_video_player.QMediaPlayer)
-        audio = Mock(spec=history_video_player.QAudioOutput)
+        # Empty tabs must not import or initialize native multimedia.
         monkeypatch.setattr(
-            history_video_player, "QMediaPlayer", Mock(return_value=media)
-        )
-        monkeypatch.setattr(
-            history_video_player, "QAudioOutput", Mock(return_value=audio)
+            history_video_player,
+            "_multimedia_types",
+            Mock(side_effect=AssertionError("Unexpected multimedia load")),
         )
     constructors = {
         "home": home_tab.HomeTab,

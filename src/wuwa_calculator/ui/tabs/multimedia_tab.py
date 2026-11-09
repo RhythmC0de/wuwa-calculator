@@ -126,11 +126,11 @@ class EventTimelinePanel(Card):
         self._position_timer = QTimer(self)
         self._position_timer.setInterval(50)
         self._position_timer.timeout.connect(self._flush_position)
-        video_player.media_player.positionChanged.connect(
+        video_player.positionChanged.connect(
             self._queue_position,
             Qt.ConnectionType.QueuedConnection,
         )
-        video_player.media_player.durationChanged.connect(self._set_duration)
+        video_player.durationChanged.connect(self._set_duration)
 
     def _set_duration(self, duration_ms: int) -> None:
         if duration_ms > 0:
@@ -194,7 +194,7 @@ class VideoInfoPanel(Card):
         for index, (name, value) in enumerate(metrics):
             self._add_metric(metrics_grid, index // 2, index % 2, name, value)
         layout.addLayout(metrics_grid)
-        video_player.media_player.durationChanged.connect(self._set_duration)
+        video_player.durationChanged.connect(self._set_duration)
 
     @staticmethod
     def _add_metric(
@@ -234,7 +234,7 @@ class PlaybackOptionsPanel(Card):
             layout, "Velocidade", ("1.0x", "0.5x", "1.5x", "2.0x")
         )
         speed_combo.currentTextChanged.connect(
-            lambda value: video_player.media_player.setPlaybackRate(
+            lambda value: video_player.set_playback_rate(
                 float(value.rstrip("x"))
             )
         )
@@ -419,5 +419,5 @@ class MultimediaTab(QWidget):
             self.setUpdatesEnabled(True)
             return
         self.dps_panel.stop_live_analysis()
-        self.video_player.media_player.pause()
+        self.video_player.pause()
         self.setUpdatesEnabled(False)

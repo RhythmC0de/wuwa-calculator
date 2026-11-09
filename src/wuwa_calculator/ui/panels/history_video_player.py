@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QEvent,
@@ -18,8 +19,6 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -34,6 +33,19 @@ from PySide6.QtWidgets import (
 )
 
 from wuwa_calculator.ui.components.components import Card, TitleLabel
+
+if TYPE_CHECKING:
+    from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+
+def _multimedia_types():
+    """Import the multimedia backend only when a video is selected."""
+    # Qt multimedia and its video surface are unused on an empty tab.
+    # pylint: disable=import-outside-toplevel
+    from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+    from PySide6.QtMultimediaWidgets import QVideoWidget
+
+    return QMediaPlayer, QAudioOutput, QVideoWidget
 
 
 class ClickableSeekSlider(QSlider):
@@ -126,6 +138,8 @@ class HistoryVideoPlayer(Card):
 
     # Widgets retain child controls for their signal/slot lifecycle.
     # pylint: disable=too-many-instance-attributes
+    positionChanged = Signal(int)
+    durationChanged = Signal(int)
     videoLoaded = Signal(str)
     videoStopped = Signal()
     analysisCompleted = Signal(object)
@@ -139,6 +153,7 @@ class HistoryVideoPlayer(Card):
         self.is_dragging = False
         self._source_ready = False
         self._is_fullscreen = False
+        self.fullscreen_overlay: QWidget | None = None
         self._last_display_second = -1
         self._analysis_thread = None
         self._analysis_running = False
@@ -149,10 +164,9 @@ class HistoryVideoPlayer(Card):
             self._hide_fullscreen_overlay
         )
 
-        self.media_player = QMediaPlayer(self)
-        self.audio_output = QAudioOutput(self)
-        self.media_player.setAudioOutput(self.audio_output)
-        self.audio_output.setVolume(1.0)
+        self._playback_rate = 1.0
+        self.media_player: QMediaPlayer | None = None
+        self.audio_output: QAudioOutput | None = None
 
         self._build_ui()
         self._connect_signals()
@@ -173,16 +187,12 @@ class HistoryVideoPlayer(Card):
         header.addWidget(self.status_label, 0, Qt.AlignmentFlag.AlignRight)
         layout.addLayout(header)
 
-        self.video_surface = QVideoWidget(self)
+        self.video_surface = QFrame(self)
         self.video_surface.setObjectName("videoSurface")
-        self._configure_video_surface()
-        self.video_surface.setMouseTracking(True)
-        self.video_surface.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.video_surface.installEventFilter(self)
-        self.video_surface.setAspectRatioMode(
-            Qt.AspectRatioMode.KeepAspectRatio
-        )
-        self.media_player.setVideoOutput(self.video_surface)
+        placeholder_layout = QVBoxLayout(self.video_surface)
+        placeholder = QLabel("Selecione um vídeo", self.video_surface)
+        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        placeholder_layout.addWidget(placeholder)
         self.hud_label = QLabel(
             "LIVE ANALYZER  //  60 FPS", self.video_surface
         )
@@ -190,7 +200,6 @@ class HistoryVideoPlayer(Card):
         self.hud_label.setFixedHeight(26)
         self._position_video_hud()
         self.hud_label.raise_()
-        self._build_fullscreen_overlay()
         layout.addWidget(self.video_surface, 1)
 
         toolbar = QFrame()
@@ -260,8 +269,6 @@ class HistoryVideoPlayer(Card):
         self.fullscreen_button.setToolTip("Tela cheia")
         self.fullscreen_button.setFixedWidth(38)
         self.fullscreen_button.setEnabled(False)
-        self.fullscreen_play_button.setEnabled(False)
-        self.fullscreen_progress.setEnabled(False)
         controls.addWidget(self.fullscreen_button)
         layout.addWidget(toolbar)
 
@@ -287,13 +294,13 @@ class HistoryVideoPlayer(Card):
         overlay_layout.setContentsMargins(10, 6, 10, 6)
         overlay_layout.setSpacing(7)
 
-        self.fullscreen_play_button = self._button("▶")
+        self.fullscreen_play_button = self._button(self.play_button.text())
         self.fullscreen_play_button.setObjectName("fullscreenPlayButton")
         self.fullscreen_play_button.setFixedSize(34, 30)
         self.fullscreen_play_button.setToolTip("Reproduzir ou pausar")
         overlay_layout.addWidget(self.fullscreen_play_button)
 
-        self.fullscreen_time_label = QLabel("0:00 / 0:00")
+        self.fullscreen_time_label = QLabel(self.time_label.text())
         self.fullscreen_time_label.setObjectName("fullscreenTimeLabel")
         self.fullscreen_time_label.setFixedWidth(82)
         overlay_layout.addWidget(self.fullscreen_time_label)
@@ -302,13 +309,14 @@ class HistoryVideoPlayer(Card):
             Qt.Orientation.Horizontal
         )
         self.fullscreen_progress.setObjectName("fullscreenProgress")
-        self.fullscreen_progress.setRange(0, 0)
+        self.fullscreen_progress.setRange(0, self.duration_ms)
+        self.fullscreen_progress.setValue(self.progress_slider.value())
         overlay_layout.addWidget(self.fullscreen_progress, 1)
 
         self.fullscreen_volume = QSlider(Qt.Orientation.Horizontal)
         self.fullscreen_volume.setObjectName("fullscreenVolume")
         self.fullscreen_volume.setRange(0, 100)
-        self.fullscreen_volume.setValue(100)
+        self.fullscreen_volume.setValue(self.volume_slider.value())
         self.fullscreen_volume.setFixedWidth(82)
         overlay_layout.addWidget(QLabel("◖"))
         overlay_layout.addWidget(self.fullscreen_volume)
@@ -325,6 +333,14 @@ class HistoryVideoPlayer(Card):
         ]:
             widget.setMouseTracking(True)
             widget.installEventFilter(self)
+
+        self.fullscreen_play_button.clicked.connect(self.toggle_playback)
+        self.fullscreen_exit_button.clicked.connect(self.exit_fullscreen)
+        self.fullscreen_progress.sliderMoved.connect(self._seek_position)
+        self.fullscreen_progress.sliderReleased.connect(
+            lambda: self._seek_position(self.fullscreen_progress.value())
+        )
+        self.fullscreen_volume.valueChanged.connect(self.set_volume)
 
     def _configure_video_surface(self) -> None:
         self.video_surface.setAttribute(
@@ -358,6 +374,37 @@ class HistoryVideoPlayer(Card):
         self.progress_slider.sliderPressed.connect(self._begin_seek)
         self.progress_slider.sliderMoved.connect(self._preview_seek)
         self.progress_slider.sliderReleased.connect(self._commit_seek)
+        self.subtitle_box.currentIndexChanged.connect(self._select_subtitle)
+        self.fullscreen_button.clicked.connect(self.enter_fullscreen)
+
+    def _ensure_media_player(self) -> None:
+        """Initialize the multimedia backend only when a video is loaded."""
+        if self.media_player is not None:
+            return
+        media_type, audio_type, video_type = _multimedia_types()
+        previous_surface = self.video_surface
+        self.video_surface = video_type(self)
+        self.video_surface.setObjectName("videoSurface")
+        self._configure_video_surface()
+        self.video_surface.setMouseTracking(True)
+        self.video_surface.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.video_surface.installEventFilter(self)
+        self.video_surface.setAspectRatioMode(
+            Qt.AspectRatioMode.KeepAspectRatio
+        )
+        self.hud_label.setParent(self.video_surface)
+        self._position_video_hud()
+        self.hud_label.show()
+        self.layout().replaceWidget(previous_surface, self.video_surface)
+        previous_surface.hide()
+        previous_surface.deleteLater()
+        self.video_surface.show()
+        self.media_player = media_type(self)
+        self.audio_output = audio_type(self)
+        self.audio_output.setVolume(self.volume_slider.value() / 100.0)
+        self.media_player.setAudioOutput(self.audio_output)
+        self.media_player.setVideoOutput(self.video_surface)
+        self.media_player.setPlaybackRate(self._playback_rate)
         self.media_player.positionChanged.connect(self._on_position_changed)
         self.media_player.durationChanged.connect(self._on_duration_changed)
         self.media_player.playbackStateChanged.connect(
@@ -368,19 +415,23 @@ class HistoryVideoPlayer(Card):
         )
         self.media_player.errorOccurred.connect(self._on_error)
         self.media_player.tracksChanged.connect(self._populate_subtitles)
-        self.subtitle_box.currentIndexChanged.connect(self._select_subtitle)
-        self.fullscreen_button.clicked.connect(self.enter_fullscreen)
-        self.fullscreen_play_button.clicked.connect(self.toggle_playback)
-        self.fullscreen_exit_button.clicked.connect(self.exit_fullscreen)
-        self.fullscreen_progress.sliderMoved.connect(
-            self.media_player.setPosition
-        )
-        self.fullscreen_progress.sliderReleased.connect(
-            lambda: self.media_player.setPosition(
-                self.fullscreen_progress.value()
-            )
-        )
-        self.fullscreen_volume.valueChanged.connect(self.set_volume)
+        self.media_player.positionChanged.connect(self.positionChanged.emit)
+        self.media_player.durationChanged.connect(self.durationChanged.emit)
+
+    def _seek_position(self, position_ms: int) -> None:
+        if self.media_player is not None:
+            self.media_player.setPosition(position_ms)
+
+    def set_playback_rate(self, rate: float) -> None:
+        """Remember playback speed even before the first video is loaded."""
+        self._playback_rate = rate
+        if self.media_player is not None:
+            self.media_player.setPlaybackRate(rate)
+
+    def pause(self) -> None:
+        """Pause playback without initializing an unused backend."""
+        if self.media_player is not None:
+            self.media_player.pause()
 
     def choose_video(self) -> None:
         """Ask the user to select a local video file."""
@@ -403,6 +454,7 @@ class HistoryVideoPlayer(Card):
         if not os.path.isfile(path):
             self._set_status("Arquivo de vídeo não encontrado")
             return False
+        self._ensure_media_player()
         self.stop_video()
         self.video_path = str(Path(path).resolve())
         self._source_ready = False
@@ -423,7 +475,7 @@ class HistoryVideoPlayer(Card):
             return
         if (
             self.media_player.playbackState()
-            == QMediaPlayer.PlaybackState.PlayingState
+            == self.media_player.PlaybackState.PlayingState
         ):
             self.media_player.pause()
         else:
@@ -433,18 +485,21 @@ class HistoryVideoPlayer(Card):
         """Stop playback and reset the current position."""
         self.exit_fullscreen()
         self._source_ready = False
-        self.media_player.stop()
-        self.media_player.setSource(QUrl())
+        if self.media_player is not None:
+            self.media_player.stop()
+            self.media_player.setSource(QUrl())
         self.video_path = ""
         self.title_label.setText("Wuthering Waves")
         self.duration_ms = 0
         self.is_dragging = False
         self.progress_slider.setRange(0, 0)
         self.progress_slider.setValue(0)
-        self.fullscreen_progress.setRange(0, 0)
-        self.fullscreen_progress.setValue(0)
+        if self.fullscreen_overlay is not None:
+            self.fullscreen_progress.setRange(0, 0)
+            self.fullscreen_progress.setValue(0)
         self.time_label.setText("0:00 / 0:00")
-        self.fullscreen_time_label.setText("0:00 / 0:00")
+        if self.fullscreen_overlay is not None:
+            self.fullscreen_time_label.setText("0:00 / 0:00")
         self.play_button.setText("▶")
         self._set_status("PRONTO")
         self._set_controls_enabled(False)
@@ -454,6 +509,10 @@ class HistoryVideoPlayer(Card):
 
     def enter_fullscreen(self) -> None:
         """Move the video into its full-screen playback view."""
+        if not self.video_path:
+            return
+        if self.fullscreen_overlay is None:
+            self._build_fullscreen_overlay()
         if self._is_fullscreen:
             self._show_fullscreen_overlay()
             return
@@ -464,6 +523,8 @@ class HistoryVideoPlayer(Card):
 
     def exit_fullscreen(self) -> None:
         """Restore the video to the embedded playback view."""
+        if self.fullscreen_overlay is None:
+            return
         if not self._is_fullscreen and not self.video_surface.isFullScreen():
             return
         self._is_fullscreen = False
@@ -521,7 +582,15 @@ class HistoryVideoPlayer(Card):
 
     def set_volume(self, value: int) -> None:
         """Apply the selected audio volume to the player."""
-        self.audio_output.setVolume(max(0, min(100, int(value))) / 100.0)
+        volume = max(0, min(100, int(value)))
+        if self.audio_output is not None:
+            self.audio_output.setVolume(volume / 100.0)
+        sliders = [self.volume_slider]
+        if self.fullscreen_overlay is not None:
+            sliders.append(self.fullscreen_volume)
+        for slider in sliders:
+            with QSignalBlocker(slider):
+                slider.setValue(volume)
 
     def _begin_seek(self) -> None:
         self.is_dragging = True
@@ -564,33 +633,37 @@ class HistoryVideoPlayer(Card):
                     f" {self._clock(self.duration_ms)}"
                 )
                 self.time_label.setText(display_time)
-                self.fullscreen_time_label.setText(display_time)
+                if self.fullscreen_overlay is not None:
+                    self.fullscreen_time_label.setText(display_time)
                 self._last_display_second = display_second
-        if not self.fullscreen_progress.isSliderDown():
+        if (
+            self.fullscreen_overlay is not None
+            and not self.fullscreen_progress.isSliderDown()
+        ):
             self.fullscreen_progress.setValue(position_ms)
 
     def _on_duration_changed(self, duration_ms: int) -> None:
         self.duration_ms = max(0, int(duration_ms))
         self._source_ready = self.duration_ms > 0 and bool(self.video_path)
         self.progress_slider.setRange(0, self.duration_ms)
-        self.fullscreen_progress.setRange(0, self.duration_ms)
+        if self.fullscreen_overlay is not None:
+            self.fullscreen_progress.setRange(0, self.duration_ms)
         self.time_label.setText(
             f"{self._clock(self.media_player.position())} /"
             f" {self._clock(self.duration_ms)}"
         )
-        self.fullscreen_time_label.setText(
-            f"{self._clock(self.media_player.position())} /"
-            f" {self._clock(self.duration_ms)}"
-        )
+        if self.fullscreen_overlay is not None:
+            self.fullscreen_time_label.setText(self.time_label.text())
         self._last_display_second = self.media_player.position() // 1000
 
     def _on_playback_state_changed(
         self, state: QMediaPlayer.PlaybackState
     ) -> None:
-        playing = state == QMediaPlayer.PlaybackState.PlayingState
-        paused = state == QMediaPlayer.PlaybackState.PausedState
+        playing = state == self.media_player.PlaybackState.PlayingState
+        paused = state == self.media_player.PlaybackState.PausedState
         self.play_button.setText("Ⅱ" if playing else "▶")
-        self.fullscreen_play_button.setText("Ⅱ" if playing else "▶")
+        if self.fullscreen_overlay is not None:
+            self.fullscreen_play_button.setText("Ⅱ" if playing else "▶")
         if paused:
             self._set_status("Pausado")
         elif playing:
@@ -600,14 +673,14 @@ class HistoryVideoPlayer(Card):
         self, status: QMediaPlayer.MediaStatus
     ) -> None:
         if status in {
-            QMediaPlayer.MediaStatus.LoadedMedia,
-            QMediaPlayer.MediaStatus.BufferedMedia,
-            QMediaPlayer.MediaStatus.BufferingMedia,
+            self.media_player.MediaStatus.LoadedMedia,
+            self.media_player.MediaStatus.BufferedMedia,
+            self.media_player.MediaStatus.BufferingMedia,
         }:
             QTimer.singleShot(0, self._refresh_video_surface)
-        if status == QMediaPlayer.MediaStatus.EndOfMedia:
+        if status == self.media_player.MediaStatus.EndOfMedia:
             self.play_button.setText("▶")
-        elif status == QMediaPlayer.MediaStatus.InvalidMedia:
+        elif status == self.media_player.MediaStatus.InvalidMedia:
             self._set_status("Arquivo de mídia inválido")
 
     def _on_error(self, _error: QMediaPlayer.Error, message: str) -> None:
@@ -627,7 +700,7 @@ class HistoryVideoPlayer(Card):
 
     def _select_subtitle(self, index: int) -> None:
         track_index = self.subtitle_box.itemData(index)
-        if track_index is not None:
+        if track_index is not None and self.media_player is not None:
             self.media_player.setActiveSubtitleTrack(int(track_index))
 
     def _reset_subtitles(self) -> None:
@@ -706,8 +779,9 @@ class HistoryVideoPlayer(Card):
         self.play_button.setEnabled(enabled)
         self.stop_button.setEnabled(enabled)
         self.fullscreen_button.setEnabled(enabled)
-        self.fullscreen_play_button.setEnabled(enabled)
-        self.fullscreen_progress.setEnabled(enabled)
+        if self.fullscreen_overlay is not None:
+            self.fullscreen_play_button.setEnabled(enabled)
+            self.fullscreen_progress.setEnabled(enabled)
 
     def _set_status(self, text: str) -> None:
         self.status_label.setText(text)

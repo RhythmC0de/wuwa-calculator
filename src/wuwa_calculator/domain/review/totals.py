@@ -65,6 +65,10 @@ class DamageTotals:
     pending_items: int
     pending_damage: int
     reviewed_hits: int  # eventos com decisão do usuário
+    # Soma bruta da engine (todos os eventos, 1 cópia cada, inclusive os não
+    # confirmados): é o número que a engine mostra sozinha. Serve para explicar
+    # a diferença para o total acima.
+    engine_damage: int = 0
 
 
 def compute_totals(
@@ -85,8 +89,10 @@ def compute_totals(
     use_decisions = mode is ReviewMode.REVIEW
 
     total = hits = peak = pending_items = pending_damage = reviewed = 0
+    engine_damage = 0
 
     for event in events:
+        engine_damage += event.damage
         decision = decisions.get(event.index) if use_decisions else None
 
         if decision is not None:
@@ -105,5 +111,11 @@ def compute_totals(
             peak = max(peak, part.value)
 
     return DamageTotals(
-        total, hits, peak, pending_items, pending_damage, reviewed
+        total,
+        hits,
+        peak,
+        pending_items,
+        pending_damage,
+        reviewed,
+        engine_damage,
     )

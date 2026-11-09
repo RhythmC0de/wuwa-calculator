@@ -3,7 +3,7 @@
 from unittest.mock import Mock
 
 import pytest
-from PySide6.QtCore import QObject, QSettings, Signal
+from PySide6.QtCore import QSettings, Signal
 from PySide6.QtWidgets import QApplication, QWidget
 
 from wuwa_calculator.domain.review import ReviewMode, correct
@@ -27,21 +27,13 @@ def fixture_review_panel(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(review_support, "QSettings", lambda *_: settings)
 
-    class Media(QObject):
-        """Emit playback events without loading native multimedia."""
-
-        positionChanged = Signal(int)
-        durationChanged = Signal(int)
-
     class Player(QWidget):
         """Provide the panel's video player interface."""
 
+        positionChanged = Signal(int)
+        durationChanged = Signal(int)
         videoLoaded = Signal(str)
         videoStopped = Signal()
-
-        def __init__(self):
-            super().__init__()
-            self.media_player = Media(self)
 
     player = Player()
     panel = DpsSimulationPanel(player)

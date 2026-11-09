@@ -247,16 +247,29 @@ class ReviewSupport(QObject):
     def _note(self, totals: DamageTotals) -> str:
         if self.mode is ReviewMode.REVIEW:
             if totals.pending_items:
-                return (
+                note = (
                     f"{totals.pending_items} hit(s) duvidoso(s) sem revisão."
                 )
-            return f"Revisão concluída ({totals.reviewed_hits} conferidos)."
-        if totals.pending_items:
-            return (
+            else:
+                note = (
+                    f"Revisão concluída ({totals.reviewed_hits} conferidos)."
+                )
+        elif totals.pending_items:
+            note = (
                 f"{totals.pending_items} hit(s) duvidoso(s) "
                 f"({totals.pending_damage:,} de dano) fora do total."
             )
-        return ""
+        else:
+            note = ""
+        # A soma bruta da engine inclui os não confirmados; mostrar o
+        # caminho até o total evita a impressão de que algo "sumiu".
+        gap = totals.engine_damage - totals.total_damage
+        if gap:
+            note += (
+                f" Soma bruta da engine: {totals.engine_damage:,}"
+                f" ({'-' if gap > 0 else '+'}{abs(gap):,} neste total)."
+            )
+        return note.strip()
 
     # Recortes
     def _ensure_crops_then(self, callback: Callable[[], None]) -> None:
