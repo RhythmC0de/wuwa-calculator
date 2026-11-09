@@ -273,7 +273,7 @@ class LiveDamageAnalysisWorker(QObject):
             if data is None or self._cancelled:
                 return
 
-            for event in data.pop("events"):
+            for event in data["events"]:
                 if self._cancelled:
                     return
                 self.damage_detected.emit(
@@ -284,6 +284,7 @@ class LiveDamageAnalysisWorker(QObject):
                         "accumulated": 0.0,
                     }
                 )
+            data["video_path"] = self.video_path
             self.analysis_completed.emit(data)
         # Thread boundary: relay every worker failure through its Qt signal.
         # pylint: disable-next=broad-exception-caught

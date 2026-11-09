@@ -17,7 +17,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from wuwa_calculator.infrastructure.video_crops import extract_crops_isolated
 from wuwa_calculator.ui.components.components import Card
+from wuwa_calculator.ui.review_support import ReviewSupport
 from wuwa_calculator.ui.workers.video_analysis_worker import (
     ANALYSIS_BUCKET_SECONDS,
     INACTIVITY_TIMEOUT,
@@ -99,6 +101,7 @@ class DpsSimulationPanel(Card):
         self._hit_times: list[float] = []
         self._observed_damage = 0.0
         self._observed_dps = 0.0
+        self._result_end = 0.0
         self.has_real_data = False
         self._pending_position_ms = 0
         self._plot_dirty = False
@@ -174,6 +177,10 @@ class DpsSimulationPanel(Card):
         form.addWidget(self.analyze_button)
         controls.addLayout(form)
         layout.addLayout(controls)
+        self.review_support = ReviewSupport(self)
+        controls.addWidget(self.review_support.widget)
+        self.review_support.hits_replaced.connect(self._replace_review_hits)
+        self.review_support.totals_changed.connect(self._update_review_totals)
 
         self.plot = DpsPlotWidget(self)
         self.plot.setObjectName("dpsPlot")
@@ -510,6 +517,7 @@ class DpsSimulationPanel(Card):
 
     def _start_live_analysis(self, video_path: str) -> None:
         self.stop_live_analysis()
+        self.review_support.reset()
         self._dps_start_time = self._analysis_start_seconds()
         self._plot_update_timer.stop()
         self._plot_dirty = False
@@ -615,6 +623,41 @@ class DpsSimulationPanel(Card):
         self._plot_dirty = True
         if not self._plot_update_timer.isActive():
             self._plot_update_timer.start()
+        self._result_end = last_hit if last_hit >= 0 else duration
+        if "events" in data:
+            self.review_support.begin(
+                {**data, "extract_crops": extract_crops_isolated}
+            )
+
+    def _replace_review_hits(self, hits: list[dict]) -> None:
+        """Rebuild the graph using only the accepted damage parts."""
+        self._live_blocks.clear()
+        self._hit_times.clear()
+        self._total_hits = 0
+        self._peak_hit = 0
+        self._observed_damage = 0.0
+        self.has_real_data = False
+        self._render_curve()
+        for hit in hits:
+            self._on_live_damage(hit)
+        self._plot_dirty = True
+
+    def _update_review_totals(self, totals: dict) -> None:
+        """Reflect review decisions in the metrics and analysis status."""
+        damage = float(totals["total_damage"])
+        self._total_hits = int(totals["total_hits"])
+        self._peak_hit = float(totals["peak_damage"])
+        self._observed_damage = damage
+        self.damage_metric.setText(f"Dano acumulado: {damage:,.0f}")
+        self.hits_metric.setText(f"Hits: {self._total_hits}")
+        self.hit_label.setText(f"Hits: {self._total_hits}")
+        self.peak_metric.setText(f"Maior hit: {self._peak_hit:,.0f}")
+        elapsed = max(0.0, self._result_end - self._dps_start_time)
+        average = damage / elapsed if elapsed else 0.0
+        self.dps_metric.setText(f"DPS médio: {average:,.0f}")
+        self.analysis_status.setText(
+            totals["note"] or "Análise da engine concluída"
+        )
 
     def _on_live_damage(self, data: dict) -> None:
         timestamp = float(data.get("timestamp", 0.0))

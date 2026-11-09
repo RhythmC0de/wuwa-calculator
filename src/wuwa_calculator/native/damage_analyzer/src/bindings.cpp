@@ -378,7 +378,7 @@ PYBIND11_MODULE(damage_analyzer, m) {
     m.def(
         "extract_event_crops",
         [](const std::string& video_path,
-           const std::vector<damage_analyzer::DamageEvent>& events,
+           const py::list& events,
            double padding,
            const std::vector<double>& offsets,
            int min_height) {
@@ -386,11 +386,16 @@ PYBIND11_MODULE(damage_analyzer, m) {
             requests.reserve(events.size());
             for (const auto& e : events) {
                 damage_analyzer::CropRequest r;
-                r.timestamp = e.timestamp;
-                r.center_x = e.center_x;
-                r.center_y = e.center_y;
-                r.width = e.width;
-                r.height = e.height;
+                const auto field = [&e](const char* name) {
+                    return py::isinstance<py::dict>(e)
+                        ? e[py::str(name)].cast<double>()
+                        : e.attr(name).cast<double>();
+                };
+                r.timestamp = field("timestamp");
+                r.center_x = static_cast<int>(field("center_x"));
+                r.center_y = static_cast<int>(field("center_y"));
+                r.width = static_cast<int>(field("width"));
+                r.height = static_cast<int>(field("height"));
                 requests.push_back(r);
             }
 

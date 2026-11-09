@@ -110,33 +110,27 @@ std::vector<CropImages> extract_event_crops(
     std::vector<CropImages> output(
         requests.size(), CropImages(offsets.size()));
 
-    int next_index = -1;  // índice do próximo frame que read() devolve
+    int next_index = 0;  // índice do próximo frame que grab() decodifica
     cv::Mat frame;
 
     for (const auto& entry : by_frame) {
         const int wanted = entry.first;
 
-        // Para frente por até ~1 s lê sequencialmente; senão, reposiciona.
-        const bool near_forward =
-            next_index >= 0 && wanted >= next_index &&
-            wanted - next_index <= static_cast<int>(fps);
-
-        if (!near_forward) {
-            capture.set(cv::CAP_PROP_POS_FRAMES, wanted);
-            next_index = wanted;
-        }
-
+        // Decodifica sempre para frente, preservando as referências H.264.
+        // Reposicionar para cada grupo pode falhar em vídeos com GOP longo.
         bool ok = true;
         while (next_index <= wanted) {
-            ok = capture.read(frame);
+            ok = capture.grab();
             ++next_index;
             if (!ok) {
                 break;
             }
         }
 
-        if (!ok || frame.empty()) {
-            next_index = -1;  // força reposicionamento no próximo
+        if (!ok) {
+            break;
+        }
+        if (!capture.retrieve(frame) || frame.empty()) {
             continue;
         }
 

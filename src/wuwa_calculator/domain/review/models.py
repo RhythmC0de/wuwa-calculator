@@ -71,6 +71,8 @@ class HitEvent:
         `confirmed`/`stacked` contam como confirmadas)."""
 
         def read(name: str, default):
+            if isinstance(event, dict):
+                return event.get(name, default)
             return getattr(event, name, default)
 
         return cls(

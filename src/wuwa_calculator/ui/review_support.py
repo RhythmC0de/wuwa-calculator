@@ -12,6 +12,7 @@ de buscar os recortes no vídeo e de gravar os exemplos de treino.
 
 from __future__ import annotations
 
+import logging
 import traceback
 from typing import Any, Callable
 
@@ -42,12 +43,15 @@ from ..infrastructure.training_samples import (
 # Instantes (s, relativos ao hit) recortados para a revisão e para o treino.
 CROP_OFFSETS = (0.0, 0.1, 0.2)
 
+log = logging.getLogger(__name__)
+
 _SETTINGS_ORG = "Tethys"
 _SETTINGS_APP = "Tethys"
 
 
 class _CropWorker(QObject):
-    done = Signal(dict)
+    # Integer event indices must survive Qt queued signal delivery.
+    done = Signal(object)
     failed = Signal(str)
     finished = Signal()
 
@@ -110,6 +114,7 @@ class ReviewSupport(QObject):
         self._thread: QThread | None = None
         self._worker: _CropWorker | None = None
         self._loading_crops = False
+        self._crop_error = ""
         self._crops_attempted = False
         self._pending_callback: Callable[[], None] | None = None
 
@@ -175,6 +180,7 @@ class ReviewSupport(QObject):
         self._decisions = {}
         self._crops = {}
         self._crops_attempted = False
+        self._crop_error = ""
         self._session = new_session_id()
         self._apply(open_dialog=True)
 
@@ -183,6 +189,7 @@ class ReviewSupport(QObject):
         self._events, self._raw_events = [], []
         self._decisions, self._crops = {}, {}
         self._crops_attempted = False
+        self._crop_error = ""
         self.review_button.hide()
         self.note_label.setText("")
 
@@ -254,17 +261,21 @@ class ReviewSupport(QObject):
     # Recortes
     def _ensure_crops_then(self, callback: Callable[[], None]) -> None:
         queue = review_queue(self._events)
-        if self._crops_attempted or all(e.index in self._crops for e in queue):
+        if self._crops_attempted or all(
+            any(self._crops.get(e.index, ())) for e in queue
+        ):
             QTimer.singleShot(0, callback)
             return
         if self._loading_crops:
             return
         if self._extract is None or not self._video_path:
-            # Engine antiga ou sem vídeo: a revisão abre sem imagens.
-            self._crops_attempted = True
-            QTimer.singleShot(0, callback)
+            self._on_crops_failed(
+                "Vídeo ou extrator de imagens indisponível. "
+                "Execute a análise novamente."
+            )
             return
 
+        self._crop_error = ""
         self._loading_crops = True
         self.note_label.setText("Preparando as imagens para revisão...")
         self.review_button.setEnabled(False)
@@ -289,23 +300,39 @@ class ReviewSupport(QObject):
 
     def _on_crops_ready(self, crops: dict) -> None:
         self._crops.update(crops)
+        missing = [
+            event.index
+            for event in review_queue(self._events)
+            if not any(self._crops.get(event.index, ()))
+        ]
+        if missing:
+            self._on_crops_failed(
+                f"{len(missing)} hit(s) sem frame disponível no vídeo."
+            )
 
-    def _on_crops_failed(self, _message: str) -> None:
+    def _on_crops_failed(self, message: str) -> None:
+        self._crop_error = message
+        log.warning("Falha nos recortes de revisão: %s", message)
         self.note_label.setText(
-            "Não foi possível extrair as imagens do vídeo."
+            "Não foi possível carregar os frames. "
+            "Clique em Revisar para tentar novamente."
         )
+        self.note_label.setToolTip(message)
 
     def _on_crops_thread_finished(self) -> None:
         callback = self._pending_callback
         self._pending_callback = None
         self._loading_crops = False
-        self._crops_attempted = True
+        self._crops_attempted = not bool(self._crop_error)
         self.review_button.setEnabled(True)
         if self._thread is not None:
             self._thread.deleteLater()
         if self._worker is not None:
             self._worker.deleteLater()
         self._thread = self._worker = None
+        if self._crop_error:
+            return
+        self.note_label.setToolTip("")
         self.note_label.setText(self._note(self.totals()))
         if callback is not None:
             callback()
@@ -317,7 +344,7 @@ class ReviewSupport(QObject):
         if not queue:
             return
         if not self._crops_attempted and any(
-            e.index not in self._crops for e in queue
+            not any(self._crops.get(e.index, ())) for e in queue
         ):
             self._ensure_crops_then(self.open_review)
             return
